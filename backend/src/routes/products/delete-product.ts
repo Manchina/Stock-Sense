@@ -15,9 +15,19 @@ import { stockLedger } from "../../db/schema/ledger.schema";
 export async function deleteProductHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.json({ success: false, message: "Product identifier is required" }, 400);
+    }
+
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
 
     const existing = await db.query.products.findFirst({
-      where: eq(products.id, id),
+      where: isUuid
+        ? eq(products.id, id)
+        : eq(products.sku, id.toUpperCase()),
     });
 
     if (!existing) {
@@ -30,9 +40,11 @@ export async function deleteProductHandler(c: Context) {
       );
     }
 
+    const productId = existing.id;
+
     // Check if referenced in immutable ledger first (fastest single lookup)
     const hasLedger = await db.query.stockLedger.findFirst({
-      where: eq(stockLedger.productId, id),
+      where: eq(stockLedger.productId, productId),
     });
 
     let isReferenced = !!hasLedger;

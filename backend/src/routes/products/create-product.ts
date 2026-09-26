@@ -42,6 +42,8 @@ export async function createProductHandler(c: Context) {
       minStockAlert,
       reorderQty,
       isActive,
+      costPrice,
+      sellingPrice,
       initialStock,
       currentStock,
       locationId,
@@ -107,6 +109,8 @@ export async function createProductHandler(c: Context) {
           uom: finalUom,
           reorderPoint: finalReorderPoint,
           reorderQty: reorderQty || 0,
+          costPrice: costPrice !== undefined && costPrice !== null ? String(costPrice) : null,
+          sellingPrice: sellingPrice !== undefined && sellingPrice !== null ? String(sellingPrice) : null,
           isActive: isActive ?? true,
         })
         .returning();
