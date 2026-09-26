@@ -4,7 +4,6 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { SearchInput } from '../../../components/ui/SearchInput';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
@@ -105,6 +104,21 @@ export const Deliveries: React.FC = () => {
     },
   ];
 
+  const filterDropdown = (
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value)}
+      className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-lg text-xs font-semibold h-8 min-h-8"
+    >
+      <option value="all">All Statuses</option>
+      <option value="draft">Draft</option>
+      <option value="waiting">Waiting (Picking)</option>
+      <option value="ready">Ready (Packed)</option>
+      <option value="done">Done (Shipped)</option>
+      <option value="canceled">Canceled</option>
+    </select>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -129,33 +143,16 @@ export const Deliveries: React.FC = () => {
         </button>
       </PageHeader>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white p-3 rounded-2xl border-2 border-slate-200 shadow-xs">
-        <div className="flex-1">
-          <SearchInput
-            value={search}
-            onChangeValue={setSearch}
-            placeholder="Search delivery #, customer or item..."
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-xl text-xs font-semibold"
-        >
-          <option value="all">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="waiting">Waiting (Picking)</option>
-          <option value="ready">Ready (Packed)</option>
-          <option value="done">Done (Shipped)</option>
-          <option value="canceled">Canceled</option>
-        </select>
-      </div>
-
       <DataTable
         columns={columns}
         data={deliveries}
         keyExtractor={(d) => d.id}
         isLoading={isLoading}
+        showSearch
+        searchValue={search}
+        searchPlaceholder="Search delivery #, customer or item..."
+        onSearchChange={setSearch}
+        filters={filterDropdown}
         pageSize={10}
         emptyTitle="No delivery orders found"
         emptyDescription="Create a delivery order when stock leaves the warehouse for customer dispatch."

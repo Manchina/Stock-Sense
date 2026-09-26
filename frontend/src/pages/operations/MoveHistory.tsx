@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { DataTable, Column } from '../../components/ui/DataTable';
-import { SearchInput } from '../../components/ui/SearchInput';
 import { INITIAL_MOVE_HISTORY, DOCUMENT_TYPE_CONFIG } from '../../lib/constants';
 import { MoveHistoryRecord } from '../../types/common';
 import { formatDate } from '../../lib/utils';
@@ -150,6 +149,21 @@ export const MoveHistory: React.FC = () => {
     },
   ];
 
+  const filterDropdown = (
+    <select
+      value={typeFilter}
+      onChange={(e) => setTypeFilter(e.target.value)}
+      className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-lg text-xs font-semibold h-8 min-h-8"
+    >
+      <option value="all">All Movements</option>
+      <option value="receipt">Receipts (+In)</option>
+      <option value="delivery">Deliveries (-Out)</option>
+      <option value="transfer">Internal Transfers (⇄ Move)</option>
+      <option value="adjustment">Adjustments (± Delta)</option>
+      <option value="initial_inventory">Initial Inventory</option>
+    </select>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -167,44 +181,21 @@ export const MoveHistory: React.FC = () => {
         </button>
       </PageHeader>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white p-3 rounded-2xl border-2 border-slate-200 shadow-xs">
-        <div className="flex-1">
-          <SearchInput
-            value={search}
-            onChangeValue={setSearch}
-            placeholder="Search move reference, product SKU, location, or user..."
-          />
-        </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-xl text-xs font-semibold"
-        >
-          <option value="all">All Movements</option>
-          <option value="receipt">Receipts (+In)</option>
-          <option value="delivery">Deliveries (-Out)</option>
-          <option value="transfer">Internal Transfers (⇄ Move)</option>
-          <option value="adjustment">Adjustments (± Delta)</option>
-          <option value="initial_inventory">Initial Inventory</option>
-        </select>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border-2 border-slate-200">
-          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
-          <span className="text-sm font-semibold text-slate-600">Loading ledger movements...</span>
-        </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={records}
-          keyExtractor={(m) => m.id}
-          pageSize={10}
-          emptyTitle="No move ledger records"
-          emptyDescription="All completed inventory operations will automatically append to this ledger."
-          paginationPosition="top"
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={records}
+        keyExtractor={(m) => m.id}
+        isLoading={isLoading}
+        showSearch
+        searchValue={search}
+        searchPlaceholder="Search move reference, SKU, location, or user..."
+        onSearchChange={setSearch}
+        filters={filterDropdown}
+        pageSize={10}
+        emptyTitle="No move ledger records"
+        emptyDescription="All completed inventory operations will automatically append to this ledger."
+        paginationPosition="top"
+      />
     </div>
   );
 };

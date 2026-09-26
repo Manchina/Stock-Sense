@@ -516,51 +516,8 @@ export const ReceiptCreate: React.FC = () => {
             ))}
           </div>
         </div>
-
-        {/* Bottom Actions Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border-2 border-slate-200 shadow-xs">
-          <button
-            type="button"
-            onClick={() => navigate('/operations/receipts')}
-            className="btn btn-ghost btn-sm rounded-xl font-bold text-slate-600 hover:text-slate-900"
-          >
-            Cancel
-          </button>
-
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleSubmit('draft')}
-              className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-2xs hover:bg-slate-50 flex-1 sm:flex-none"
-            >
-              <FileText className="w-4 h-4 mr-1 text-slate-500" />
-              <span>Save as Draft</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleSubmit()}
-              className={cn(
-                'btn btn-sm rounded-xl font-black text-white shadow-xs flex items-center justify-center gap-2 px-5 flex-1 sm:flex-none transition-all',
-                initialStatus === 'done'
-                  ? 'btn-success bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
-                  : initialStatus === 'ready'
-                  ? 'btn-warning bg-amber-600 hover:bg-amber-700 border-amber-600 text-white'
-                  : 'btn-primary bg-blue-600 hover:bg-blue-700 border-blue-600'
-              )}
-            >
-              {isSubmitting ? (
-                <span className="loading loading-spinner loading-xs" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              <span>{getSubmitButtonLabel()}</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
 };
+

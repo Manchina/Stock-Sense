@@ -10,12 +10,18 @@ interface ProductTableProps {
   isLoading?: boolean;
   onDelete?: (product: Product) => void;
   pageSize?: number;
+  searchValue?: string;
+  onSearchChange?: (val: string) => void;
+  filtersComponent?: React.ReactNode;
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({
   products,
   isLoading,
   pageSize = 10,
+  searchValue,
+  onSearchChange,
+  filtersComponent,
 }) => {
   const navigate = useNavigate();
 
@@ -80,6 +86,11 @@ export const ProductTable: React.FC<ProductTableProps> = ({
       keyExtractor={(p) => p.id}
       isLoading={isLoading}
       pageSize={pageSize}
+      showSearch={Boolean(onSearchChange)}
+      searchValue={searchValue}
+      searchPlaceholder="Search products by SKU, name, or category..."
+      onSearchChange={onSearchChange}
+      filters={filtersComponent}
       emptyTitle="No products found"
       emptyDescription="Create your first inventory product or adjust your search filters."
       onRowClick={(p) => navigate(`/products/${p.id}`)}

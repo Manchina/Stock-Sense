@@ -2,17 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { ProductFilters } from '../../features/products/components/ProductFilters';
 import { ProductTable } from '../../features/products/components/ProductTable';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { productsApi } from '../../features/products/api';
 import { ProductFilterState } from '../../features/products/types';
 import { Product } from '../../types/common';
+import { PRODUCT_CATEGORIES } from '../../lib/constants';
 
 export const Products: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>(PRODUCT_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -83,6 +83,38 @@ export const Products: React.FC = () => {
     }
   };
 
+  const productFiltersComponent = (
+    <div className="flex items-center gap-2">
+      {/* Category Filter */}
+      <select
+        value={filters.category}
+        onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+        className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-lg shrink-0 h-8 min-h-8"
+      >
+        <option value="all">All Categories</option>
+        {categories.map((cat) => (
+          <option key={cat} value={cat}>
+            {cat}
+          </option>
+        ))}
+      </select>
+
+      {/* Stock Status Filter */}
+      <select
+        value={filters.stockStatus}
+        onChange={(e) =>
+          setFilters({ ...filters, stockStatus: e.target.value as ProductFilterState['stockStatus'] })
+        }
+        className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-lg shrink-0 h-8 min-h-8"
+      >
+        <option value="all">All Stock Status</option>
+        <option value="in_stock">In Stock</option>
+        <option value="low_stock">Low Stock Alerts</option>
+        <option value="out_of_stock">Out of Stock</option>
+      </select>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -113,11 +145,12 @@ export const Products: React.FC = () => {
         </div>
       )}
 
-      <ProductFilters filters={filters} onChange={setFilters} categories={categories} />
-
       <ProductTable
         products={filteredProducts}
         isLoading={isLoading}
+        searchValue={filters.search}
+        onSearchChange={(val) => setFilters({ ...filters, search: val })}
+        filtersComponent={productFiltersComponent}
         onDelete={(prod) => setDeleteTarget(prod)}
       />
 
