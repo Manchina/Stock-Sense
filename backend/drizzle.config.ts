@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 // Support running drizzle-kit from either root or stocksense-api folder
 config({ path: resolve(process.cwd(), ".env") });
-config({ path: resolve(process.cwd(), "stocksense-api/.env") });
+config({ path: resolve(process.cwd(), "backend/.env") });
 
 export default defineConfig({
   schema: "./src/db/schema/index.ts",

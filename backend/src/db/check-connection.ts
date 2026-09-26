@@ -15,7 +15,7 @@ async function main() {
     console.error("❌ Database connection failed:");
     console.error(result.error);
     console.log("\n💡 Tips:");
-    console.log("1. Ensure your DATABASE_URL in 'stocksense-api/.env' is correct.");
+    console.log("1. Ensure your DATABASE_URL in 'backend/.env' is correct.");
     console.log("2. For Neon Postgres, verify your project is not paused and uses the pooled connection string.");
     console.log("3. For local PostgreSQL, verify PostgreSQL service is running on your system.");
     process.exit(1);

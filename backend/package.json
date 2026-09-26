@@ -1,5 +1,5 @@
 {
-  "name": "stocksense-api",
+  "name": "backend",
   "version": "1.0.0",
   "type": "module",
   "description": "StockSense Backend API with Hono, Drizzle ORM, and Neon PostgreSQL",

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 // Load .env file from project root or package directory
 config({ path: resolve(process.cwd(), ".env") });
-config({ path: resolve(process.cwd(), "stocksense-api/.env") });
+config({ path: resolve(process.cwd(), "backend/.env") });
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
