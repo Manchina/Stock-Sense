@@ -1,0 +1,83 @@
+export type OperationStatus = 'draft' | 'waiting' | 'ready' | 'done' | 'canceled';
+
+export type DocumentType = 'receipt' | 'delivery' | 'internal' | 'adjustment';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'inventory_manager' | 'warehouse_staff' | 'admin';
+  avatar?: string;
+  warehouseId?: string;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  address?: string;
+  locations: string[]; // e.g. ["Rack A", "Rack B", "Main Store", "Production Floor"]
+  createdAt: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  category: string;
+  unitOfMeasure: string;
+  currentStock: number;
+  minStockAlert: number;
+  costPrice?: number;
+  sellingPrice?: number;
+  locationStock?: Record<string, number>; // e.g. { "Main Warehouse / Rack A": 45 }
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OperationItem {
+  productId: string;
+  productName: string;
+  sku: string;
+  quantity: number;
+  unitOfMeasure: string;
+}
+
+export interface OperationDocument {
+  id: string;
+  documentNumber: string;
+  type: DocumentType;
+  status: OperationStatus;
+  partner?: string; // Vendor for receipts, Customer for deliveries
+  sourceLocation?: string;
+  destinationLocation?: string;
+  items: OperationItem[];
+  notes?: string;
+  createdAt: string;
+  scheduledDate?: string;
+  validatedAt?: string;
+  validatedBy?: string;
+}
+
+export interface MoveHistoryRecord {
+  id: string;
+  date: string;
+  referenceNumber: string;
+  documentType: DocumentType;
+  productName: string;
+  sku: string;
+  fromLocation: string;
+  toLocation: string;
+  quantityChange: number; // e.g. +50 or -20
+  unitOfMeasure: string;
+  user: string;
+}
+
+export interface DashboardKPIs {
+  totalProducts: number;
+  lowStockItems: number;
+  pendingReceipts: number;
+  pendingDeliveries: number;
+  scheduledTransfers: number;
+}

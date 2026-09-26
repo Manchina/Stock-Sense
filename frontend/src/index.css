@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased bg-slate-50 text-slate-900;
+  }
+}
+
+@layer components {
+  /* Sleek, professional form controls with comfortable compact heights */
+  .input,
+  .select {
+    height: 2.25rem !important;
+    min-height: 2.25rem !important;
+    font-size: 0.8125rem !important;
+    line-height: 1.25rem !important;
+  }
+
+  .input-sm,
+  .select-sm {
+    height: 2rem !important;
+    min-height: 2rem !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full hover:bg-slate-400;
+}
