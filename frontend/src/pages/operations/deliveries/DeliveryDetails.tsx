@@ -289,12 +289,12 @@ export const DeliveryDetails: React.FC = () => {
                 <td className="font-bold text-slate-900">{item.productName}</td>
                 <td className="font-mono text-slate-500 font-medium">{item.sku || '-'}</td>
                 <td className="text-right font-bold text-slate-700 text-xs">
-                  {item.quantity} {item.unitOfMeasure || 'pcs'}
+                  {item.qtyOrdered ?? item.quantity} {item.unitOfMeasure || 'pcs'}
                 </td>
                 <td className="text-right font-black text-rose-700 text-sm">
                   {operation.status === 'done'
-                    ? `-${item.quantity} ${item.unitOfMeasure || 'pcs'}`
-                    : `${item.quantity} ${item.unitOfMeasure || 'pcs'} (Pending)`}
+                    ? `-${item.qtyDelivered && item.qtyDelivered > 0 ? item.qtyDelivered : (item.qtyOrdered ?? item.quantity)} ${item.unitOfMeasure || 'pcs'}`
+                    : `${item.qtyDelivered ?? 0} ${item.unitOfMeasure || 'pcs'} (Pending)`}
                 </td>
               </tr>
             ))}

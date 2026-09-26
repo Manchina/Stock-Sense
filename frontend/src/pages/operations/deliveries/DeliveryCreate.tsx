@@ -28,6 +28,20 @@ export const DeliveryCreate: React.FC = () => {
     productsApi.getAll().then((loaded) => {
       if (loaded && loaded.length > 0) {
         setAvailableProducts(loaded);
+        setItems((prev) => {
+          if (prev.length === 1 && (prev[0].productId === 'prod-1' || !loaded.some((p) => p.id === prev[0].productId))) {
+            return [
+              {
+                productId: loaded[0].id,
+                productName: loaded[0].name,
+                sku: loaded[0].sku,
+                quantity: 5,
+                unitOfMeasure: loaded[0].unitOfMeasure || 'Units (pcs)',
+              },
+            ];
+          }
+          return prev;
+        });
       }
     });
   }, []);
@@ -47,11 +61,11 @@ export const DeliveryCreate: React.FC = () => {
     setItems([
       ...items,
       {
-        productId: defaultProd.id,
-        productName: defaultProd.name,
-        sku: defaultProd.sku,
+        productId: defaultProd?.id || 'prod-1',
+        productName: defaultProd?.name || 'Industrial Steel Flange',
+        sku: defaultProd?.sku || 'STL-FLANGE-01',
         quantity: 5,
-        unitOfMeasure: defaultProd.unitOfMeasure || 'Units (pcs)',
+        unitOfMeasure: defaultProd?.unitOfMeasure || 'Units (pcs)',
       },
     ]);
   };

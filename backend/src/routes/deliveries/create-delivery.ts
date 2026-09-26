@@ -11,6 +11,8 @@ import {
 } from "./delivery.helper";
 import { eq } from "drizzle-orm";
 
+import { executeStockMovement } from "../../services/stock.service";
+
 /**
  * POST /api/v1/deliveries
  * Create a new outbound delivery order document.
@@ -40,6 +42,7 @@ export async function createDeliveryHandler(c: Context) {
       sourceWarehouse,
       sourceLocation,
       status: requestedStatus,
+      validateImmediately,
       notes,
       items,
     } = parsed.data;
@@ -58,11 +61,12 @@ export async function createDeliveryHandler(c: Context) {
     const currentUser = c.get("user") as { id: string; name?: string } | undefined;
     const userId = await resolveDefaultUserId(currentUser?.id);
 
-    // 3. Determine status: Creation is always unvalidated (draft/waiting/ready)
-    const initialStatus = requestedStatus === "done" ? "ready" : requestedStatus || "draft";
+    // 3. Determine status & validation
+    const shouldValidate = validateImmediately || requestedStatus === "done";
+    const initialStatus = shouldValidate ? "done" : requestedStatus || "draft";
     const orderNumber = generateDeliveryNumber();
 
-    // 4. Create delivery order & lines in atomic transaction (no stock movement on create)
+    // 4. Create delivery order & lines in atomic transaction
     const createdDelivery = await db.transaction(async (tx) => {
       const [insertedDelivery] = await tx
         .insert(deliveryOrders)
@@ -75,8 +79,8 @@ export async function createDeliveryHandler(c: Context) {
           status: initialStatus,
           notes: notes?.trim() || null,
           createdBy: userId,
-          validatedAt: null,
-          validatedBy: null,
+          validatedAt: shouldValidate ? new Date() : null,
+          validatedBy: shouldValidate ? userId : null,
         })
         .returning();
 
@@ -84,10 +88,10 @@ export async function createDeliveryHandler(c: Context) {
         throw new Error("Failed to insert delivery order header");
       }
 
-      // Insert line items (qtyDelivered is 0 until dispatched & validated)
       for (const item of items) {
         const qtyOrdered = item.quantity ?? item.qtyOrdered ?? 1;
-        const qtyPicked = initialStatus === "ready" ? qtyOrdered : (item.qtyPicked ?? 0);
+        const qtyPicked = shouldValidate || initialStatus === "ready" ? qtyOrdered : (item.qtyPicked ?? 0);
+        const qtyDelivered = shouldValidate ? qtyOrdered : 0;
 
         // Verify product exists
         const prod = await tx.query.products.findFirst({
@@ -103,8 +107,21 @@ export async function createDeliveryHandler(c: Context) {
           productId: item.productId,
           qtyOrdered,
           qtyPicked,
-          qtyDelivered: 0,
+          qtyDelivered,
         });
+
+        // Deduct stock if immediate validation is requested
+        if (shouldValidate && facility.locationId) {
+          await executeStockMovement(tx, {
+            productId: item.productId,
+            locationId: facility.locationId,
+            deltaQty: -qtyDelivered,
+            sourceType: "delivery",
+            sourceId: insertedDelivery.id,
+            notes: `Delivery ${orderNumber} to ${customerName}`,
+            userId,
+          });
+        }
       }
 
       return insertedDelivery;

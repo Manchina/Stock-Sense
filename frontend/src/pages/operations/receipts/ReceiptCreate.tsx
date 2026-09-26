@@ -74,20 +74,16 @@ export const ReceiptCreate: React.FC = () => {
       if (loaded && loaded.length > 0) {
         setAvailableProducts(loaded);
         setItems((prev) => {
-          if (prev.length > 0 && prev[0].productId) {
-            const match = loaded.find((p) => p.id === prev[0].productId);
-            if (match) {
-              return prev.map((it, idx) =>
-                idx === 0
-                  ? {
-                      ...it,
-                      productName: match.name,
-                      sku: match.sku,
-                      unitOfMeasure: match.unitOfMeasure || 'Units (pcs)',
-                    }
-                  : it
-              );
-            }
+          if (prev.length === 1 && (prev[0].productId === 'prod-1' || !loaded.some((p) => p.id === prev[0].productId))) {
+            return [
+              {
+                productId: loaded[0].id,
+                productName: loaded[0].name,
+                sku: loaded[0].sku,
+                quantity: 50,
+                unitOfMeasure: loaded[0].unitOfMeasure || 'Units (pcs)',
+              },
+            ];
           }
           return prev;
         });

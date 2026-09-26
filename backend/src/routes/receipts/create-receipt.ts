@@ -11,6 +11,8 @@ import {
 } from "./receipt.helper";
 import { eq } from "drizzle-orm";
 
+import { executeStockMovement } from "../../services/stock.service";
+
 /**
  * POST /api/v1/receipts
  * Create a new incoming stock receipt document.
@@ -39,6 +41,7 @@ export async function createReceiptHandler(c: Context) {
       destinationWarehouse,
       destinationLocation,
       status: requestedStatus,
+      validateImmediately,
       expectedDate,
       scheduledDate,
       notes,
@@ -59,13 +62,14 @@ export async function createReceiptHandler(c: Context) {
     const currentUser = c.get("user") as { id: string; name?: string } | undefined;
     const userId = await resolveDefaultUserId(currentUser?.id);
 
-    // 3. Determine status: Creation is always unvalidated (draft/waiting/ready)
-    const initialStatus = requestedStatus === "done" ? "ready" : requestedStatus || "draft";
+    // 3. Determine status & validation
+    const shouldValidate = validateImmediately || requestedStatus === "done";
+    const initialStatus = shouldValidate ? "done" : requestedStatus || "draft";
     const receiptNumber = generateReceiptNumber();
 
     const expectedDateObj = scheduledDate || expectedDate ? new Date((scheduledDate || expectedDate)!) : new Date();
 
-    // 4. Create receipt & lines in atomic transaction (no stock movement on create)
+    // 4. Create receipt & lines in atomic transaction
     const createdReceipt = await db.transaction(async (tx) => {
       const [insertedReceipt] = await tx
         .insert(receipts)
@@ -78,8 +82,8 @@ export async function createReceiptHandler(c: Context) {
           notes: notes?.trim() || null,
           expectedDate: expectedDateObj,
           createdBy: userId,
-          validatedAt: null,
-          validatedBy: null,
+          validatedAt: shouldValidate ? new Date() : null,
+          validatedBy: shouldValidate ? userId : null,
         })
         .returning();
 
@@ -87,9 +91,10 @@ export async function createReceiptHandler(c: Context) {
         throw new Error("Failed to insert receipt header");
       }
 
-      // Insert line items (qtyReceived is 0 until received & validated)
+      // Insert line items
       for (const item of items) {
         const qty = item.quantity ?? item.qtyExpected ?? 1;
+        const qtyReceived = shouldValidate ? qty : 0;
 
         // Verify product exists
         const prod = await tx.query.products.findFirst({
@@ -104,8 +109,21 @@ export async function createReceiptHandler(c: Context) {
           receiptId: insertedReceipt.id,
           productId: item.productId,
           qtyExpected: qty,
-          qtyReceived: 0,
+          qtyReceived,
         });
+
+        // Credit stock if immediate validation is requested
+        if (shouldValidate && facility.locationId) {
+          await executeStockMovement(tx, {
+            productId: item.productId,
+            locationId: facility.locationId,
+            deltaQty: qtyReceived,
+            sourceType: "receipt",
+            sourceId: insertedReceipt.id,
+            notes: `Receipt ${receiptNumber} from ${supplierName}`,
+            userId,
+          });
+        }
       }
 
       return insertedReceipt;

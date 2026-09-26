@@ -4,8 +4,7 @@ import { db } from "../../config/db";
 import { deliveryOrders, deliveryLines } from "../../db/schema/deliveries.schema";
 import { products } from "../../db/schema/products.schema";
 import { updateDeliverySchema } from "./delivery.schema";
-import { resolveSourceFacility, resolveDefaultUserId, formatDeliveryResponse } from "./delivery.helper";
-import { executeStockMovement } from "../../services/stock.service";
+import { resolveSourceFacility, formatDeliveryResponse } from "./delivery.helper";
 
 /**
  * PUT /api/v1/deliveries/:id & PATCH /api/v1/deliveries/:id
@@ -42,11 +41,14 @@ export async function updateDeliveryHandler(c: Context) {
       return c.json({ success: false, message: `Delivery order with ID '${id}' not found` }, 404);
     }
 
-    if (existing.status === "done") {
+    if (existing.status === "done" || existing.status === "canceled") {
       return c.json(
         {
           success: false,
-          message: "Cannot modify a validated and dispatched delivery order.",
+          message:
+            existing.status === "done"
+              ? "Cannot modify a validated and dispatched delivery order."
+              : "Cannot modify a canceled delivery order.",
         },
         400
       );
@@ -64,9 +66,39 @@ export async function updateDeliveryHandler(c: Context) {
       items,
     } = parsed.data;
 
+    if (newStatus === "done") {
+      return c.json(
+        {
+          success: false,
+          message:
+            "Direct completion via update is not permitted. Please use POST /api/v1/deliveries/:id/validate to validate and dispatch stock atomically.",
+        },
+        400
+      );
+    }
+
+    if (newStatus === "canceled") {
+      return c.json(
+        {
+          success: false,
+          message:
+            "Direct cancellation via update is not permitted. Please use POST /api/v1/deliveries/:id/cancel.",
+        },
+        400
+      );
+    }
+
+    if (items !== undefined && items.length === 0) {
+      return c.json(
+        {
+          success: false,
+          message: "Delivery order must contain at least one line item.",
+        },
+        400
+      );
+    }
+
     const customerName = inputCustomer || inputPartner;
-    const currentUser = c.get("user") as { id: string } | undefined;
-    const userId = await resolveDefaultUserId(currentUser?.id);
 
     await db.transaction(async (tx) => {
       // 1. Update header fields
@@ -79,13 +111,8 @@ export async function updateDeliveryHandler(c: Context) {
       if (notes !== undefined) updateData.notes = notes?.trim() || null;
       if (newStatus !== undefined) {
         updateData.status = newStatus;
-        if (newStatus === "done") {
-          updateData.validatedAt = new Date();
-          updateData.validatedBy = userId;
-        }
       }
 
-      let activeLocationId = existing.sourceLocationId;
       if (sourceWarehouseId || sourceLocationId || sourceLocation) {
         const facility = await resolveSourceFacility({
           sourceWarehouseId,
@@ -94,7 +121,6 @@ export async function updateDeliveryHandler(c: Context) {
         });
         updateData.sourceWarehouseId = facility.warehouseId;
         updateData.sourceLocationId = facility.locationId;
-        activeLocationId = facility.locationId;
       }
 
       await tx.update(deliveryOrders).set(updateData).where(eq(deliveryOrders.id, id));
@@ -105,8 +131,7 @@ export async function updateDeliveryHandler(c: Context) {
 
         for (const item of items) {
           const qtyOrdered = item.quantity ?? item.qtyOrdered ?? 1;
-          const qtyPicked = item.qtyPicked ?? (newStatus === "ready" || newStatus === "done" ? qtyOrdered : 0);
-          const qtyDelivered = newStatus === "done" ? (item.qtyDelivered ?? qtyOrdered) : (item.qtyDelivered ?? 0);
+          const qtyPicked = item.qtyPicked ?? (newStatus === "ready" ? qtyOrdered : 0);
 
           const prod = await tx.query.products.findFirst({
             where: eq(products.id, item.productId),
@@ -121,46 +146,8 @@ export async function updateDeliveryHandler(c: Context) {
             productId: item.productId,
             qtyOrdered,
             qtyPicked,
-            qtyDelivered,
+            qtyDelivered: 0,
           });
-
-          // If transition to done in this update, deduct stock
-          if (newStatus === "done" && activeLocationId) {
-            const deductQty = qtyDelivered > 0 ? qtyDelivered : qtyOrdered;
-            await executeStockMovement(tx, {
-              productId: item.productId,
-              locationId: activeLocationId,
-              deltaQty: -deductQty,
-              sourceType: "delivery",
-              sourceId: id,
-              notes: `Delivery ${existing.orderNumber} to ${customerName || existing.customerName}`,
-              userId,
-            });
-          }
-        }
-      } else if (newStatus === "done") {
-        // If status changed to done without replacing items, deduct based on existing lines
-        for (const line of existing.lines) {
-          const deductQty = line.qtyDelivered > 0 ? line.qtyDelivered : line.qtyOrdered;
-          await tx
-            .update(deliveryLines)
-            .set({
-              qtyPicked: line.qtyPicked > 0 ? line.qtyPicked : deductQty,
-              qtyDelivered: deductQty,
-            })
-            .where(eq(deliveryLines.id, line.id));
-
-          if (activeLocationId) {
-            await executeStockMovement(tx, {
-              productId: line.productId,
-              locationId: activeLocationId,
-              deltaQty: -deductQty,
-              sourceType: "delivery",
-              sourceId: id,
-              notes: `Delivery ${existing.orderNumber} to ${existing.customerName}`,
-              userId,
-            });
-          }
         }
       }
     });

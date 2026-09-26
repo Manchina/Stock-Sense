@@ -255,10 +255,12 @@ export const ReceiptDetails: React.FC = () => {
                   <td className="font-bold text-slate-900">{item.productName}</td>
                   <td className="font-mono text-slate-500 font-medium">{item.sku}</td>
                   <td className="text-right font-semibold text-slate-700">
-                    {item.quantity} {item.unitOfMeasure}
+                    {item.qtyExpected ?? item.quantity} {item.unitOfMeasure}
                   </td>
                   <td className="text-right font-black text-emerald-700 text-sm">
-                    +{item.quantity} {item.unitOfMeasure}
+                    {operation.status === 'done'
+                      ? `+${item.qtyReceived && item.qtyReceived > 0 ? item.qtyReceived : (item.qtyExpected ?? item.quantity)} ${item.unitOfMeasure}`
+                      : `${item.qtyReceived ?? 0} ${item.unitOfMeasure}`}
                   </td>
                 </tr>
               ))

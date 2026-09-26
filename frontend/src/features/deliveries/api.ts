@@ -101,36 +101,8 @@ export const deliveriesApi = {
       }
       throw new Error('Invalid response from deliveries API');
     } catch (err: any) {
-      console.warn('API delivery creation failed, falling back locally:', err);
-      if (err?.message && (err.message.includes('Insufficient') || err.message.includes('Validation failed'))) {
-        throw err;
-      }
-
-      const docNumber = `DEL-${new Date().getFullYear()}-${String(
-        Math.floor(Math.random() * 9000) + 1000
-      )}`;
-      const fallbackItem: OperationDocument = {
-        id: `op-del-${Date.now()}`,
-        documentNumber: docNumber,
-        type: 'delivery',
-        status: payload.status || 'draft',
-        partner: payload.customerName || payload.partner || 'Direct Customer',
-        sourceLocation: payload.sourceLocation || 'Main Warehouse / Packing Zone',
-        items: payload.items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName || 'Inventory Product',
-          sku: i.sku || 'SKU-UNKNOWN',
-          quantity: i.quantity || i.qtyOrdered || 1,
-          unitOfMeasure: i.unitOfMeasure || 'Units (pcs)',
-        })),
-        notes: payload.notes || '',
-        createdAt: new Date().toISOString(),
-        scheduledDate: payload.scheduledDate,
-        validatedAt: payload.status === 'done' ? new Date().toISOString() : undefined,
-        validatedBy: payload.status === 'done' ? 'Inventory Manager' : undefined,
-      };
-      fallbackDeliveries.unshift(fallbackItem);
-      return { success: true, data: fallbackItem, message: 'Created delivery order' };
+      console.warn('API delivery creation error:', err);
+      throw err;
     }
   },
 
@@ -149,16 +121,6 @@ export const deliveriesApi = {
       throw new Error('Invalid response from validate delivery API');
     } catch (err) {
       console.warn(`API delivery validation failed for ${id}:`, err);
-      const idx = fallbackDeliveries.findIndex((d) => d.id === id);
-      if (idx !== -1) {
-        fallbackDeliveries[idx] = {
-          ...fallbackDeliveries[idx],
-          status: 'done',
-          validatedAt: new Date().toISOString(),
-          validatedBy: 'Warehouse Dispatcher',
-        };
-        return { success: true, data: fallbackDeliveries[idx] };
-      }
       throw err;
     }
   },
@@ -178,14 +140,6 @@ export const deliveriesApi = {
       throw new Error('Invalid response from cancel delivery API');
     } catch (err) {
       console.warn(`API delivery cancel failed for ${id}:`, err);
-      const idx = fallbackDeliveries.findIndex((d) => d.id === id);
-      if (idx !== -1) {
-        fallbackDeliveries[idx] = {
-          ...fallbackDeliveries[idx],
-          status: 'canceled',
-        };
-        return { success: true, data: fallbackDeliveries[idx] };
-      }
       throw err;
     }
   },
@@ -207,16 +161,6 @@ export const deliveriesApi = {
       throw new Error('Invalid response from update delivery API');
     } catch (err) {
       console.warn(`API delivery update failed for ${id}:`, err);
-      const idx = fallbackDeliveries.findIndex((d) => d.id === id);
-      if (idx !== -1) {
-        const updated = {
-          ...fallbackDeliveries[idx],
-          ...payload,
-          status: payload.status || fallbackDeliveries[idx].status,
-        } as OperationDocument;
-        fallbackDeliveries[idx] = updated;
-        return { success: true, data: updated };
-      }
       throw err;
     }
   },
