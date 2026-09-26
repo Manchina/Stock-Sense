@@ -7,6 +7,7 @@ import { env } from "./config/env";
 import { warehouseRouter } from "./routes/warehouse";
 import { productsRouter } from "./routes/products";
 import { categoriesRouter } from "./routes/categories";
+import { transfersRouter } from "./routes/transfers";
 import { historyRouter } from "./routes/history";
 
 import { errorHandler } from "./middleware/error.middleware";
@@ -52,6 +53,10 @@ app.route("/api/products", productsRouter);
 
 app.route("/api/v1/categories", categoriesRouter);
 app.route("/api/categories", categoriesRouter);
+
+app.route("/api/v1/transfers", transfersRouter);
+app.route("/api/transfers", transfersRouter);
+
 app.route("/api/v1/history", historyRouter);
 app.route("/api/history", historyRouter);
 
@@ -65,6 +70,7 @@ app.get("/", (c) => {
       warehouses: "/api/v1/warehouses",
       products: "/api/v1/products",
       categories: "/api/v1/categories",
+      transfers: "/api/v1/transfers",
       history: "/api/v1/history",
     },
   });
