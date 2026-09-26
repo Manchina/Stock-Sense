@@ -25,16 +25,41 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     unitOfMeasure: initialData?.unitOfMeasure || UNITS_OF_MEASURE[0],
     currentStock: initialData?.currentStock ?? 0,
     minStockAlert: initialData?.minStockAlert ?? 10,
-    costPrice: initialData?.costPrice ?? 0,
-    sellingPrice: initialData?.sellingPrice ?? 0,
+    costPrice: initialData?.costPrice != null ? Number(initialData.costPrice) : undefined,
+    sellingPrice: initialData?.sellingPrice != null ? Number(initialData.sellingPrice) : undefined,
     description: initialData?.description || '',
     initialLocation: initialData?.initialLocation || '',
   });
 
   useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.name || '',
+        sku: initialData.sku || '',
+        category: initialData.category || PRODUCT_CATEGORIES[0],
+        unitOfMeasure: initialData.unitOfMeasure || UNITS_OF_MEASURE[0],
+        currentStock: initialData.currentStock ?? 0,
+        minStockAlert: initialData.minStockAlert ?? 10,
+        costPrice: initialData.costPrice != null ? Number(initialData.costPrice) : undefined,
+        sellingPrice: initialData.sellingPrice != null ? Number(initialData.sellingPrice) : undefined,
+        description: initialData.description || '',
+        initialLocation: initialData.initialLocation || '',
+      });
+      if (initialData.category) {
+        setCategoriesList((prev) =>
+          prev.includes(initialData.category!) ? prev : [initialData.category!, ...prev]
+        );
+      }
+    }
+  }, [initialData]);
+
+  useEffect(() => {
     productsApi.getCategories().then((cats) => {
       if (cats && cats.length > 0) {
-        setCategoriesList(cats);
+        setCategoriesList((prev) => {
+          const combined = new Set([...cats, ...prev]);
+          return Array.from(combined);
+        });
       }
     });
 
@@ -180,8 +205,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               <input
                 type="number"
                 min="0"
-                value={formData.currentStock}
-                onChange={(e) => setFormData({ ...formData, currentStock: Number(e.target.value) })}
+                value={formData.currentStock ?? ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    currentStock: e.target.value === '' ? 0 : Number(e.target.value),
+                  })
+                }
                 className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
               />
             </div>
@@ -196,8 +226,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             <input
               type="number"
               min="0"
-              value={formData.minStockAlert}
-              onChange={(e) => setFormData({ ...formData, minStockAlert: Number(e.target.value) })}
+              value={formData.minStockAlert ?? ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  minStockAlert: e.target.value === '' ? 0 : Number(e.target.value),
+                })
+              }
               className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
             />
           </div>
@@ -242,8 +277,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               type="number"
               step="0.01"
               min="0"
-              value={formData.costPrice}
-              onChange={(e) => setFormData({ ...formData, costPrice: Number(e.target.value) })}
+              value={formData.costPrice ?? ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  costPrice: e.target.value === '' ? undefined : Number(e.target.value),
+                })
+              }
               placeholder="0.00"
               className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
             />
@@ -259,8 +299,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               type="number"
               step="0.01"
               min="0"
-              value={formData.sellingPrice}
-              onChange={(e) => setFormData({ ...formData, sellingPrice: Number(e.target.value) })}
+              value={formData.sellingPrice ?? ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  sellingPrice: e.target.value === '' ? undefined : Number(e.target.value),
+                })
+              }
               placeholder="0.00"
               className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
             />
