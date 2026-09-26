@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { ProductSelect } from '../../../components/inventory/ProductSelect';
 import { WarehouseSelect } from '../../../components/inventory/WarehouseSelect';
 import { QuantityInput } from '../../../components/inventory/QuantityInput';
-import { INITIAL_PRODUCTS, INITIAL_OPERATIONS } from '../../../lib/constants';
-import { OperationDocument, OperationItem } from '../../../types/common';
+import { INITIAL_PRODUCTS } from '../../../lib/constants';
+import { OperationItem, Product } from '../../../types/common';
+import { transfersApi } from '../../../features/transfers/api';
 
 export const TransferCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export const TransferCreate: React.FC = () => {
   const [scheduledDate, setScheduledDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [items, setItems] = useState<OperationItem[]>([
     {
@@ -45,16 +48,15 @@ export const TransferCreate: React.FC = () => {
     setItems(items.filter((_, idx) => idx !== index));
   };
 
-  const handleProductChange = (index: number, productId: string) => {
-    const prod = INITIAL_PRODUCTS.find((p) => p.id === productId);
-    if (!prod) return;
+  const handleProductChange = (index: number, productId: string, product?: Product) => {
+    const prod = product || INITIAL_PRODUCTS.find((p) => p.id === productId);
     const updated = [...items];
     updated[index] = {
       ...updated[index],
-      productId: prod.id,
-      productName: prod.name,
-      sku: prod.sku,
-      unitOfMeasure: prod.unitOfMeasure,
+      productId: productId,
+      productName: prod?.name || 'Product',
+      sku: prod?.sku || 'SKU',
+      unitOfMeasure: prod?.unitOfMeasure || 'units',
     };
     setItems(updated);
   };
@@ -65,28 +67,42 @@ export const TransferCreate: React.FC = () => {
     setItems(updated);
   };
 
-  const handleSubmit = (status: 'draft' | 'waiting' | 'done') => {
-    const docNumber = `INT-${new Date().getFullYear()}-${String(
-      Math.floor(Math.random() * 9000) + 1000
-    )}`;
+  const handleSubmit = async (status: 'draft' | 'waiting' | 'done') => {
+    setErrorMessage(null);
 
-    const newTransfer: OperationDocument = {
-      id: `op-int-${Date.now()}`,
-      documentNumber: docNumber,
-      type: 'internal',
-      status,
-      sourceLocation,
-      destinationLocation,
-      items,
-      notes,
-      createdAt: new Date().toISOString(),
-      scheduledDate,
-      validatedAt: status === 'done' ? new Date().toISOString() : undefined,
-      validatedBy: status === 'done' ? 'Alex Miller (Warehouse Staff)' : undefined,
-    };
+    if (!sourceLocation || !destinationLocation) {
+      setErrorMessage('Please select both source and destination locations.');
+      return;
+    }
 
-    INITIAL_OPERATIONS.unshift(newTransfer);
-    navigate(`/operations/transfers/${newTransfer.id}`);
+    if (sourceLocation === destinationLocation) {
+      setErrorMessage('Source and Destination locations cannot be identical.');
+      return;
+    }
+
+    if (items.length === 0) {
+      setErrorMessage('Please add at least one product to transfer.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const created = await transfersApi.create({
+        sourceLocation,
+        destinationLocation,
+        status,
+        notes,
+        scheduledDate,
+        items,
+      });
+
+      navigate(`/operations/transfers/${created.id}`);
+    } catch (err: any) {
+      console.error('Failed to create transfer:', err);
+      setErrorMessage(err.message || 'Failed to create internal transfer');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const totalQty = items.reduce((acc, i) => acc + i.quantity, 0);
@@ -100,20 +116,41 @@ export const TransferCreate: React.FC = () => {
       >
         <button
           type="button"
+          disabled={isSubmitting}
+          onClick={() => handleSubmit('draft')}
+          className="btn btn-ghost btn-xs sm:btn-sm rounded-lg font-bold text-slate-700"
+        >
+          Save Draft
+        </button>
+        <button
+          type="button"
+          disabled={isSubmitting}
           onClick={() => handleSubmit('waiting')}
-          className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
+          className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white text-slate-800"
         >
           Schedule Transfer
         </button>
         <button
           type="button"
+          disabled={isSubmitting}
           onClick={() => handleSubmit('done')}
           className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs flex items-center gap-1.5 px-3.5"
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Validate ({totalQty})
+          {isSubmitting ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          )}
+          Validate & Move ({totalQty})
         </button>
       </PageHeader>
+
+      {errorMessage && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -191,7 +228,7 @@ export const TransferCreate: React.FC = () => {
                 <div className="flex-1">
                   <ProductSelect
                     value={item.productId}
-                    onChange={(id) => handleProductChange(idx, id)}
+                    onChange={(id, prod) => handleProductChange(idx, id, prod)}
                     label={`Product Item #${idx + 1}`}
                   />
                 </div>

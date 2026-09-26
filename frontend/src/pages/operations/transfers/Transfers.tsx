@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -8,33 +8,47 @@ import { SearchInput } from '../../../components/ui/SearchInput';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
+import { transfersApi } from '../../../features/transfers/api';
 
 export const Transfers: React.FC = () => {
   const navigate = useNavigate();
+  const [transfers, setTransfers] = useState<OperationDocument[]>(
+    INITIAL_OPERATIONS.filter((o) => o.type === 'internal')
+  );
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const transfers = INITIAL_OPERATIONS.filter((o) => o.type === 'internal');
+  const fetchTransfers = useCallback(async () => {
+    try {
+      const data = await transfersApi.getAll({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: search.trim() ? search.trim() : undefined,
+      });
 
-  const filtered = transfers.filter((t) => {
-    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        t.documentNumber.toLowerCase().includes(q) ||
-        t.sourceLocation?.toLowerCase().includes(q) ||
-        t.destinationLocation?.toLowerCase().includes(q) ||
-        t.items.some((i) => i.productName.toLowerCase().includes(q))
-      );
+      if (data && data.length > 0) {
+        setTransfers(data);
+      } else if (!search && statusFilter === 'all') {
+        setTransfers(INITIAL_OPERATIONS.filter((o) => o.type === 'internal'));
+      } else {
+        setTransfers([]);
+      }
+    } catch (err) {
+      console.warn('Could not fetch transfers from API:', err);
+    } finally {
+      setIsLoading(false);
     }
-    return true;
-  });
+  }, [statusFilter, search]);
+
+  useEffect(() => {
+    fetchTransfers();
+  }, [fetchTransfers]);
 
   const columns: Column<OperationDocument>[] = [
     {
       header: 'Transfer #',
       cell: (t) => (
-        <div className="font-bold text-slate-900 hover:text-primary">
+        <div className="font-bold text-slate-900 hover:text-primary font-mono text-xs">
           {t.documentNumber}
         </div>
       ),
@@ -53,7 +67,7 @@ export const Transfers: React.FC = () => {
       header: 'Transfer Items',
       cell: (t) => (
         <div className="text-xs space-y-0.5">
-          {t.items.map((i, idx) => (
+          {(t.items || []).map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
               <span className="font-bold text-teal-700">{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
             </div>
@@ -108,14 +122,21 @@ export const Transfers: React.FC = () => {
         </select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyExtractor={(t) => t.id}
-        emptyTitle="No internal transfers found"
-        emptyDescription="Schedule a stock transfer between your storage racks or warehouses."
-        onRowClick={(t) => navigate(`/operations/transfers/${t.id}`)}
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border-2 border-slate-200">
+          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+          <span className="text-sm font-semibold text-slate-600">Loading transfers...</span>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={transfers}
+          keyExtractor={(t) => t.id}
+          emptyTitle="No internal transfers found"
+          emptyDescription="Schedule a stock transfer between your storage racks or warehouses."
+          onRowClick={(t) => navigate(`/operations/transfers/${t.id}`)}
+        />
+      )}
     </div>
   );
 };

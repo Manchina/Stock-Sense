@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Warehouse } from '../../types/common';
 import { INITIAL_WAREHOUSES } from '../../lib/constants';
+import { api } from '../../lib/api';
 
 interface WarehouseSelectProps {
   value: string;
@@ -15,12 +16,33 @@ interface WarehouseSelectProps {
 export const WarehouseSelect: React.FC<WarehouseSelectProps> = ({
   value,
   onChange,
-  warehouses = INITIAL_WAREHOUSES,
+  warehouses: passedWarehouses,
   label = 'Warehouse / Location',
   placeholder = 'Select warehouse location...',
   required = false,
   className,
 }) => {
+  const [internalWarehouses, setInternalWarehouses] = useState<Warehouse[]>(
+    passedWarehouses || INITIAL_WAREHOUSES
+  );
+
+  useEffect(() => {
+    if (passedWarehouses) {
+      setInternalWarehouses(passedWarehouses);
+    } else {
+      api
+        .get<{ success: boolean; data: Warehouse[] }>('/warehouses')
+        .then((res) => {
+          if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+            setInternalWarehouses(res.data);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not load warehouses for select, using fallback:', err);
+        });
+    }
+  }, [passedWarehouses]);
+
   return (
     <div className={`form-control w-full ${className || ''}`}>
       {label && (
@@ -39,9 +61,9 @@ export const WarehouseSelect: React.FC<WarehouseSelectProps> = ({
         <option value="" disabled>
           {placeholder}
         </option>
-        {warehouses.map((wh) => (
+        {internalWarehouses.map((wh) => (
           <optgroup key={wh.id} label={`${wh.name} (${wh.code})`}>
-            {wh.locations.map((loc) => {
+            {(wh.locations || []).map((loc) => {
               const fullLoc = `${wh.code} / ${loc}`;
               return (
                 <option key={fullLoc} value={fullLoc}>
