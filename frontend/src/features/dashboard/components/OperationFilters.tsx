@@ -1,21 +1,36 @@
 import React from 'react';
-import { Filter, RotateCcw } from 'lucide-react';
+import { Filter, RotateCcw, Search } from 'lucide-react';
 import { DashboardFilterState } from '../types';
 import { INITIAL_WAREHOUSES, PRODUCT_CATEGORIES } from '../../../lib/constants';
+
+interface WarehouseOption {
+  id?: string;
+  code: string;
+  name: string;
+}
+
+interface CategoryOption {
+  id?: string;
+  name: string;
+}
 
 interface OperationFiltersProps {
   filters: DashboardFilterState;
   onChange: (filters: DashboardFilterState) => void;
   onReset: () => void;
+  warehouses?: WarehouseOption[];
+  categories?: CategoryOption[];
 }
 
 export const OperationFilters: React.FC<OperationFiltersProps> = ({
   filters,
   onChange,
   onReset,
+  warehouses = INITIAL_WAREHOUSES,
+  categories = PRODUCT_CATEGORIES.map((c, idx) => ({ id: `cat-${idx}`, name: c })),
 }) => {
   return (
-    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 shadow-xs space-y-2.5">
+    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 shadow-xs space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
           <Filter className="w-3.5 h-3.5 text-primary" />
@@ -28,6 +43,18 @@ export const OperationFilters: React.FC<OperationFiltersProps> = ({
           <RotateCcw className="w-3 h-3" />
           Reset
         </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          type="text"
+          value={filters.search || ''}
+          onChange={(e) => onChange({ ...filters, search: e.target.value })}
+          placeholder="Quick search operations by ref #, partner, item name, or notes..."
+          className="input input-sm input-bordered w-full pl-9 bg-slate-50 border-slate-200 focus:bg-white focus:border-primary text-xs font-medium rounded-xl"
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
@@ -91,8 +118,8 @@ export const OperationFilters: React.FC<OperationFiltersProps> = ({
             className="select select-sm select-bordered w-full bg-white border border-slate-300 text-slate-900 rounded-lg text-xs font-medium"
           >
             <option value="all">All Warehouses</option>
-            {INITIAL_WAREHOUSES.map((w) => (
-              <option key={w.id} value={w.code}>
+            {warehouses.map((w) => (
+              <option key={w.id || w.code} value={w.code}>
                 {w.name} ({w.code})
               </option>
             ))}
@@ -114,9 +141,9 @@ export const OperationFilters: React.FC<OperationFiltersProps> = ({
             className="select select-sm select-bordered w-full bg-white border border-slate-300 text-slate-900 rounded-lg text-xs font-medium"
           >
             <option value="all">All Categories</option>
-            {PRODUCT_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
+            {categories.map((cat) => (
+              <option key={cat.id || cat.name} value={cat.name}>
+                {cat.name}
               </option>
             ))}
           </select>
