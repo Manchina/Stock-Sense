@@ -7,8 +7,11 @@ import { env } from "./config/env";
 import { warehouseRouter } from "./routes/warehouse";
 import { productsRouter } from "./routes/products";
 import { categoriesRouter } from "./routes/categories";
+import { transfersRouter } from "./routes/transfers";
+import { adjustmentsRouter } from "./routes/adjustments";
 import { historyRouter } from "./routes/history";
 import { receiptsRouter } from "./routes/receipts";
+import { dashboardRouter } from "./routes/dashboard";
 
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
@@ -45,6 +48,9 @@ app.get("/health", async (c) => {
 });
 
 // Routes
+app.route("/api/v1/dashboard", dashboardRouter);
+app.route("/api/dashboard", dashboardRouter);
+
 app.route("/api/v1/warehouses", warehouseRouter);
 app.route("/api/warehouses", warehouseRouter);
 
@@ -53,6 +59,13 @@ app.route("/api/products", productsRouter);
 
 app.route("/api/v1/categories", categoriesRouter);
 app.route("/api/categories", categoriesRouter);
+
+app.route("/api/v1/transfers", transfersRouter);
+app.route("/api/transfers", transfersRouter);
+
+app.route("/api/v1/adjustments", adjustmentsRouter);
+app.route("/api/adjustments", adjustmentsRouter);
+
 app.route("/api/v1/history", historyRouter);
 app.route("/api/history", historyRouter);
 
@@ -68,9 +81,12 @@ app.get("/", (c) => {
     description: "Production-grade Inventory Management System API",
     healthCheck: "/health",
     endpoints: {
+      dashboard: "/api/v1/dashboard",
       warehouses: "/api/v1/warehouses",
       products: "/api/v1/products",
       categories: "/api/v1/categories",
+      transfers: "/api/v1/transfers",
+      adjustments: "/api/v1/adjustments",
       history: "/api/v1/history",
       receipts: "/api/v1/receipts",
     },

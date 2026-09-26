@@ -11,11 +11,18 @@ export async function getProductStockHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
     if (!id) {
-      return c.json({ success: false, message: "Product ID is required" }, 400);
+      return c.json({ success: false, message: "Product identifier is required" }, 400);
     }
 
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
+
     const product = await db.query.products.findFirst({
-      where: eq(products.id, id),
+      where: isUuid
+        ? eq(products.id, id)
+        : eq(products.sku, id.toUpperCase()),
       with: {
         stockLevels: {
           with: {

@@ -151,7 +151,7 @@ describe("Products & Categories Module Integration Tests", () => {
     expect(Array.isArray(body.data.locations)).toBe(true);
   });
 
-  it("PUT /api/v1/products/:id - should update product master details", async () => {
+  it("PUT /api/v1/products/:id - should update product master details including pricing", async () => {
     const updatedName = "Updated Test Widget (Rev 2)";
     const res = await app.request(`/api/v1/products/${createdProductId}`, {
       method: "PUT",
@@ -159,6 +159,8 @@ describe("Products & Categories Module Integration Tests", () => {
       body: JSON.stringify({
         name: updatedName,
         minStockAlert: 25,
+        costPrice: 42.5,
+        sellingPrice: 89.99,
       }),
     });
 
@@ -167,6 +169,8 @@ describe("Products & Categories Module Integration Tests", () => {
     expect(body.success).toBe(true);
     expect(body.data.name).toBe(updatedName);
     expect(body.data.minStockAlert).toBe(25);
+    expect(body.data.costPrice).toBe(42.5);
+    expect(body.data.sellingPrice).toBe(89.99);
   });
 
   it("GET /api/v1/products/alerts/low-stock - should list items at or below reorder point", async () => {

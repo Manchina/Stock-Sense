@@ -7,27 +7,29 @@ import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
-import { api } from '../../../lib/api';
+import { adjustmentsApi } from '../../../features/adjustments/api';
 
 export const Adjustments: React.FC = () => {
   const navigate = useNavigate();
+  const [adjustments, setAdjustments] = useState<OperationDocument[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [adjustments, setAdjustments] = useState<OperationDocument[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const fetchAdjustments = useCallback(async () => {
     try {
-      const response = await api.get<{ success: boolean; data: OperationDocument[] }>('/operations/adjustments', {
-        params: {
-          search: search.trim() ? search.trim() : undefined,
-          status: statusFilter === 'all' ? undefined : statusFilter,
-        },
+      const data = await adjustmentsApi.getAll({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: search.trim() ? search.trim() : undefined,
       });
 
-      if (response && response.data && Array.isArray(response.data)) {
-        setAdjustments(response.data);
+      if (data && data.length > 0) {
+        setAdjustments(data);
+      } else if (!search && statusFilter === 'all') {
+        setAdjustments(INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment'));
+      } else {
+        setAdjustments([]);
       }
     } catch (err) {
       console.warn('API fetch adjustments failed, falling back to local dataset:', err);
@@ -66,7 +68,7 @@ export const Adjustments: React.FC = () => {
       accessorKey: 'documentNumber',
       sortable: true,
       cell: (a) => (
-        <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">
+        <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer font-mono text-xs">
           {a.documentNumber}
         </div>
       ),
@@ -81,7 +83,7 @@ export const Adjustments: React.FC = () => {
       header: 'Adjusted Products',
       cell: (a) => (
         <div className="text-xs space-y-0.5">
-          {a.items.map((i, idx) => (
+          {(a.items || []).map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
               <span className={`font-bold ${i.quantity >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                 {i.quantity > 0 ? `+${i.quantity}` : i.quantity} {i.unitOfMeasure}

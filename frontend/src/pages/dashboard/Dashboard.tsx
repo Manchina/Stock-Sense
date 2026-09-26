@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Boxes,
@@ -8,73 +8,72 @@ import {
   ArrowLeftRight,
   Plus,
   ArrowRight,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { KpiCard } from '../../features/dashboard/components/KpiCard';
-import { OperationFilters } from '../../features/dashboard/components/OperationFilters';
 import { InventoryChart } from '../../features/dashboard/components/InventoryChart';
 import { DataTable, Column } from '../../components/ui/DataTable';
 import { StatusBadge } from '../../components/ui/StatusBadge';
-import { DashboardFilterState } from '../../features/dashboard/types';
-import {
-  INITIAL_PRODUCTS,
-  INITIAL_OPERATIONS,
-  DOCUMENT_TYPE_CONFIG,
-} from '../../lib/constants';
+import { DashboardStats } from '../../features/dashboard/types';
+import { dashboardApi } from '../../features/dashboard/api';
+import { DOCUMENT_TYPE_CONFIG } from '../../lib/constants';
 import { OperationDocument } from '../../types/common';
 import { formatDate } from '../../lib/utils';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [, startTransition] = useTransition();
 
-  const [filters, setFilters] = useState<DashboardFilterState>({
-    documentType: 'all',
-    status: 'all',
-    warehouseId: 'all',
-    category: 'all',
-  });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [operations, setOperations] = useState<OperationDocument[]>([]);
 
-  const handleResetFilters = () => {
-    setFilters({
-      documentType: 'all',
-      status: 'all',
-      warehouseId: 'all',
-      category: 'all',
-    });
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingOps, setIsLoadingOps] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+
+  // Fetch KPI Stats
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await dashboardApi.getStats();
+      setStats(data);
+    } catch (err) {
+      console.warn('Could not load dashboard stats:', err);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, []);
+
+  // Fetch Top 4 Recent Operations
+  const loadOperations = useCallback(async () => {
+    setIsLoadingOps(true);
+    try {
+      const ops = await dashboardApi.getOperations(undefined, 4);
+      startTransition(() => {
+        setOperations(ops.slice(0, 4));
+      });
+    } catch (err) {
+      console.warn('Could not load dashboard operations:', err);
+    } finally {
+      setIsLoadingOps(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadStats();
+    loadOperations();
+  }, [loadStats, loadOperations]);
+
+  // Full Refresh handler
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([loadStats(), loadOperations()]);
+    setLastRefreshedAt(new Date());
+    setIsRefreshing(false);
   };
-
-  // KPIs
-  const totalProducts = INITIAL_PRODUCTS.length;
-  const lowStockCount = INITIAL_PRODUCTS.filter(
-    (p) => p.currentStock <= p.minStockAlert
-  ).length;
-  const pendingReceipts = INITIAL_OPERATIONS.filter(
-    (o) => o.type === 'receipt' && o.status !== 'done' && o.status !== 'canceled'
-  ).length;
-  const pendingDeliveries = INITIAL_OPERATIONS.filter(
-    (o) => o.type === 'delivery' && o.status !== 'done' && o.status !== 'canceled'
-  ).length;
-  const scheduledTransfers = INITIAL_OPERATIONS.filter(
-    (o) => o.type === 'internal' && o.status !== 'done' && o.status !== 'canceled'
-  ).length;
-
-  // Filtered Operations
-  const filteredOperations = useMemo(() => {
-    return INITIAL_OPERATIONS.filter((op) => {
-      if (filters.documentType !== 'all' && op.type !== filters.documentType) {
-        return false;
-      }
-      if (filters.status !== 'all' && op.status !== filters.status) {
-        return false;
-      }
-      if (filters.warehouseId !== 'all') {
-        const matchSrc = op.sourceLocation?.includes(filters.warehouseId);
-        const matchDst = op.destinationLocation?.includes(filters.warehouseId);
-        if (!matchSrc && !matchDst) return false;
-      }
-      return true;
-    });
-  }, [filters]);
 
   const columns: Column<OperationDocument>[] = [
     {
@@ -82,13 +81,18 @@ export const Dashboard: React.FC = () => {
       accessorKey: 'documentNumber',
       sortable: true,
       cell: (op) => {
-        const typeInfo = DOCUMENT_TYPE_CONFIG[op.type];
+        const typeInfo = DOCUMENT_TYPE_CONFIG[op.type] || {
+          label: op.type.toUpperCase(),
+          color: 'text-slate-600',
+        };
         return (
           <div>
-            <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">
+            <div className="font-bold text-slate-900 font-mono text-xs hover:text-primary transition-colors cursor-pointer">
               {op.documentNumber}
             </div>
-            <div className={`text-[11px] font-bold ${typeInfo.color}`}>{typeInfo.label}</div>
+            <div className={`text-[11px] font-bold ${typeInfo.color}`}>
+              {typeInfo.label}
+            </div>
           </div>
         );
       },
@@ -96,10 +100,25 @@ export const Dashboard: React.FC = () => {
     {
       header: 'Source / Destination',
       cell: (op) => (
-        <div className="text-xs space-y-0.5">
-          {op.partner && <div><span className="text-slate-500 font-medium">Partner:</span> <span className="font-semibold text-slate-800">{op.partner}</span></div>}
-          {op.sourceLocation && <div><span className="text-slate-500 font-medium">From:</span> <span className="font-semibold text-slate-800">{op.sourceLocation}</span></div>}
-          {op.destinationLocation && <div><span className="text-slate-500 font-medium">To:</span> <span className="font-semibold text-slate-800">{op.destinationLocation}</span></div>}
+        <div className="text-xs space-y-0.5 max-w-xs">
+          {op.partner && (
+            <div>
+              <span className="text-slate-400 font-medium">Partner:</span>{' '}
+              <span className="font-semibold text-slate-800">{op.partner}</span>
+            </div>
+          )}
+          {op.sourceLocation && (
+            <div className="truncate">
+              <span className="text-slate-400 font-medium">From:</span>{' '}
+              <span className="font-semibold text-slate-800">{op.sourceLocation}</span>
+            </div>
+          )}
+          {op.destinationLocation && (
+            <div className="truncate">
+              <span className="text-slate-400 font-medium">To:</span>{' '}
+              <span className="font-semibold text-slate-800">{op.destinationLocation}</span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -107,11 +126,23 @@ export const Dashboard: React.FC = () => {
       header: 'Items Breakdown',
       cell: (op) => (
         <div className="text-xs space-y-0.5">
-          {op.items.map((i, idx) => (
-            <div key={idx} className="font-semibold text-slate-900">
-              <span className="font-bold text-slate-700">{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
-            </div>
-          ))}
+          {op.items && op.items.length > 0 ? (
+            op.items.slice(0, 2).map((i, idx) => (
+              <div key={idx} className="font-medium text-slate-900">
+                <span className="font-bold text-slate-700">
+                  {i.quantity > 0 ? `+${i.quantity}` : i.quantity} {i.unitOfMeasure}
+                </span>{' '}
+                × {i.productName}
+              </div>
+            ))
+          ) : (
+            <span className="text-slate-400 italic">No line items</span>
+          )}
+          {op.items && op.items.length > 2 && (
+            <span className="text-[10px] text-slate-400 font-semibold">
+              +{op.items.length - 2} more item{op.items.length - 2 > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       ),
     },
@@ -125,7 +156,11 @@ export const Dashboard: React.FC = () => {
       header: 'Date',
       accessorKey: 'createdAt',
       sortable: true,
-      cell: (op) => <span className="text-xs font-medium text-slate-600">{formatDate(op.createdAt)}</span>,
+      cell: (op) => (
+        <span className="text-xs font-medium text-slate-600">
+          {formatDate(op.createdAt)}
+        </span>
+      ),
     },
   ];
 
@@ -143,26 +178,47 @@ export const Dashboard: React.FC = () => {
         subtitle="Live snapshot of inventory movements, warehouse capacity, and stock alerts."
       >
         <button
-          onClick={() => navigate('/operations/receipts/new')}
-          className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs"
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 hover:bg-slate-50 gap-1.5 shadow-2xs"
+          title="Refresh real-time data from database"
         >
-          <Plus className="w-4 h-4 mr-1" />
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+          <span>{isRefreshing ? 'Syncing...' : 'Sync Live Data'}</span>
+        </button>
+        <button
+          onClick={() => navigate('/operations/receipts/new')}
+          className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs gap-1"
+        >
+          <Plus className="w-4 h-4" />
           New Receipt
         </button>
         <button
           onClick={() => navigate('/operations/deliveries/new')}
-          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 gap-1"
         >
-          <Plus className="w-4 h-4 mr-1" />
+          <Plus className="w-4 h-4" />
           New Delivery
         </button>
       </PageHeader>
 
-      {/* 5 KPIs as required */}
+      {/* Live sync status banner */}
+      <div className="flex items-center justify-between text-xs px-1 text-slate-500 font-medium">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>PostgreSQL Live Ledger Connected</span>
+        </div>
+        <span>Last synced: {lastRefreshedAt.toLocaleTimeString()}</span>
+      </div>
+
+      {/* 5 Real-Time KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         <KpiCard
           title="Products in Stock"
-          value={totalProducts}
+          value={isLoadingStats ? '...' : (stats?.totalProducts ?? 0)}
           subtitle="Active items catalog"
           icon={Boxes}
           variant="primary"
@@ -170,15 +226,15 @@ export const Dashboard: React.FC = () => {
         />
         <KpiCard
           title="Low Stock Alerts"
-          value={lowStockCount}
+          value={isLoadingStats ? '...' : (stats?.lowStockCount ?? 0)}
           subtitle="Below safety threshold"
           icon={AlertTriangle}
           variant="warning"
-          onClick={() => navigate('/products')}
+          onClick={() => navigate('/products?status=low_stock')}
         />
         <KpiCard
           title="Pending Receipts"
-          value={pendingReceipts}
+          value={isLoadingStats ? '...' : (stats?.pendingReceipts ?? 0)}
           subtitle="Awaiting vendor intake"
           icon={ArrowDownLeft}
           variant="success"
@@ -186,7 +242,7 @@ export const Dashboard: React.FC = () => {
         />
         <KpiCard
           title="Pending Deliveries"
-          value={pendingDeliveries}
+          value={isLoadingStats ? '...' : (stats?.pendingDeliveries ?? 0)}
           subtitle="Awaiting dispatch"
           icon={ArrowUpRight}
           variant="info"
@@ -194,7 +250,7 @@ export const Dashboard: React.FC = () => {
         />
         <KpiCard
           title="Transfers Sched."
-          value={scheduledTransfers}
+          value={isLoadingStats ? '...' : (stats?.scheduledTransfers ?? 0)}
           subtitle="Internal moves"
           icon={ArrowLeftRight}
           variant="teal"
@@ -203,25 +259,28 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Activity Overview */}
-      <InventoryChart />
-
-      {/* Dynamic Filters */}
-      <OperationFilters
-        filters={filters}
-        onChange={setFilters}
-        onReset={handleResetFilters}
+      <InventoryChart
+        breakdown={stats?.activityBreakdown}
+        monthLabel={stats?.monthLabel}
+        totalOperations={stats?.totalOperations}
+        loading={isLoadingStats}
       />
 
-      {/* Filtered Operations */}
+      {/* Recent Inventory Operations Table (Top 4) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Recent Inventory Operations ({filteredOperations.length})
-            </h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Filtered inventory movement documents and fulfillment orders
-            </p>
+          <div className="flex items-center gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Recent Inventory Operations (Top {Math.min(operations.length, 4)})
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Latest movements across receipts, dispatches, transfers, and adjustments
+              </p>
+            </div>
+            {isLoadingOps && (
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            )}
           </div>
           <button
             onClick={() => navigate('/operations/move-history')}
@@ -234,11 +293,11 @@ export const Dashboard: React.FC = () => {
 
         <DataTable
           columns={columns}
-          data={filteredOperations}
+          data={operations.slice(0, 4)}
           keyExtractor={(op) => op.id}
-          pageSize={8}
-          emptyTitle="No matching operations found"
-          emptyDescription="Try resetting your filters or create a new operation document."
+          pageSize={4}
+          emptyTitle="No recent operations recorded"
+          emptyDescription="Create a new receipt, delivery, or transfer to start tracking stock movements."
           onRowClick={handleRowClick}
           paginationPosition="top"
         />

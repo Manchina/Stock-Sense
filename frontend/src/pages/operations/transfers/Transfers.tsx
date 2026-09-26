@@ -7,27 +7,29 @@ import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
-import { api } from '../../../lib/api';
+import { transfersApi } from '../../../features/transfers/api';
 
 export const Transfers: React.FC = () => {
   const navigate = useNavigate();
+  const [transfers, setTransfers] = useState<OperationDocument[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [transfers, setTransfers] = useState<OperationDocument[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const fetchTransfers = useCallback(async () => {
     try {
-      const response = await api.get<{ success: boolean; data: OperationDocument[] }>('/operations/transfers', {
-        params: {
-          search: search.trim() ? search.trim() : undefined,
-          status: statusFilter === 'all' ? undefined : statusFilter,
-        },
+      const data = await transfersApi.getAll({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: search.trim() ? search.trim() : undefined,
       });
 
-      if (response && response.data && Array.isArray(response.data)) {
-        setTransfers(response.data);
+      if (data && data.length > 0) {
+        setTransfers(data);
+      } else if (!search && statusFilter === 'all') {
+        setTransfers(INITIAL_OPERATIONS.filter((o) => o.type === 'internal'));
+      } else {
+        setTransfers([]);
       }
     } catch (err) {
       console.warn('API fetch transfers failed, falling back to local dataset:', err);
@@ -67,7 +69,7 @@ export const Transfers: React.FC = () => {
       accessorKey: 'documentNumber',
       sortable: true,
       cell: (t) => (
-        <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">
+        <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer font-mono text-xs">
           {t.documentNumber}
         </div>
       ),
@@ -88,7 +90,7 @@ export const Transfers: React.FC = () => {
       header: 'Transfer Items',
       cell: (t) => (
         <div className="text-xs space-y-0.5">
-          {t.items.map((i, idx) => (
+          {(t.items || []).map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
               <span className="font-bold text-teal-700">{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
             </div>

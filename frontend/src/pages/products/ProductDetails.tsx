@@ -94,9 +94,9 @@ export const ProductDetails: React.FC = () => {
           <span className="text-xs font-bold text-slate-500">Selling & Cost Valuation</span>
           <div className="my-2">
             <span className="text-2xl font-black text-slate-900">
-              {product.sellingPrice ? formatCurrency(product.sellingPrice) : 'N/A'}
+              {product.sellingPrice != null ? formatCurrency(product.sellingPrice) : 'N/A'}
             </span>
-            {product.costPrice && (
+            {product.costPrice != null && (
               <span className="text-xs text-slate-500 font-medium block mt-0.5">
                 Cost: {formatCurrency(product.costPrice)}
               </span>

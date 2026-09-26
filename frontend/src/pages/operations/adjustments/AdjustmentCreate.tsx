@@ -1,37 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { ProductSelect } from '../../../components/inventory/ProductSelect';
 import { WarehouseSelect } from '../../../components/inventory/WarehouseSelect';
-import { INITIAL_PRODUCTS, INITIAL_OPERATIONS } from '../../../lib/constants';
-import { OperationDocument, OperationItem } from '../../../types/common';
+import { INITIAL_PRODUCTS } from '../../../lib/constants';
+import { Product, OperationItem } from '../../../types/common';
+import { productsApi } from '../../../features/products/api';
+import { adjustmentsApi } from '../../../features/adjustments/api';
 
 export const AdjustmentCreate: React.FC = () => {
   const navigate = useNavigate();
   const [selectedProductId, setSelectedProductId] = useState(INITIAL_PRODUCTS[0].id);
+  const [selectedProduct, setSelectedProduct] = useState<Product>(INITIAL_PRODUCTS[0]);
   const [location, setLocation] = useState('WH-MAIN / Rack A');
   const [physicalCount, setPhysicalCount] = useState<number>(INITIAL_PRODUCTS[0].currentStock);
-  const [reason, setReason] = useState('Damaged stock write-off');
+  const [reason, setReason] = useState('Physical count reconciliation');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const selectedProduct =
-    INITIAL_PRODUCTS.find((p) => p.id === selectedProductId) || INITIAL_PRODUCTS[0];
+  useEffect(() => {
+    productsApi.getById(selectedProductId).then((p) => {
+      if (p) {
+        setSelectedProduct(p);
+        // Calculate location-specific stock if available
+        const locStock = p.locationStock?.[location] ?? p.currentStock;
+        setPhysicalCount(locStock);
+      }
+    });
+  }, [selectedProductId, location]);
 
-  const recordedStock = selectedProduct.currentStock;
+  const recordedStock = selectedProduct.locationStock?.[location] ?? selectedProduct.currentStock;
   const difference = physicalCount - recordedStock;
 
-  const handleProductSelect = (id: string) => {
+  const handleProductSelect = (id: string, prod?: Product) => {
     setSelectedProductId(id);
-    const p = INITIAL_PRODUCTS.find((item) => item.id === id);
-    if (p) {
-      setPhysicalCount(p.currentStock);
+    if (prod) {
+      setSelectedProduct(prod);
+      const locStock = prod.locationStock?.[location] ?? prod.currentStock;
+      setPhysicalCount(locStock);
     }
   };
 
-  const handleSubmit = (validateImmediately: boolean) => {
-    const docNumber = `ADJ-${new Date().getFullYear()}-${String(
-      Math.floor(Math.random() * 9000) + 1000
-    )}`;
+  const handleSubmit = async (validateImmediately: boolean) => {
+    setErrorMessage(null);
+
+    if (!selectedProductId || !location) {
+      setErrorMessage('Please select both a product and target location.');
+      return;
+    }
+
+    if (!reason.trim()) {
+      setErrorMessage('Please provide a reason or note for the adjustment.');
+      return;
+    }
 
     const items: OperationItem[] = [
       {
@@ -43,21 +65,23 @@ export const AdjustmentCreate: React.FC = () => {
       },
     ];
 
-    const newAdjustment: OperationDocument = {
-      id: `op-adj-${Date.now()}`,
-      documentNumber: docNumber,
-      type: 'adjustment',
-      status: validateImmediately ? 'done' : 'draft',
-      sourceLocation: location,
-      items,
-      notes: reason,
-      createdAt: new Date().toISOString(),
-      validatedAt: validateImmediately ? new Date().toISOString() : undefined,
-      validatedBy: validateImmediately ? 'Sarah Connor (Inventory Manager)' : undefined,
-    };
+    try {
+      setIsSubmitting(true);
+      const created = await adjustmentsApi.create({
+        location,
+        reason: reason.trim(),
+        status: validateImmediately ? 'done' : 'draft',
+        notes: reason.trim(),
+        items,
+      });
 
-    INITIAL_OPERATIONS.unshift(newAdjustment);
-    navigate(`/operations/adjustments/${newAdjustment.id}`);
+      navigate(`/operations/adjustments/${created.id}`);
+    } catch (err: any) {
+      console.error('Failed to create adjustment:', err);
+      setErrorMessage(err.message || 'Failed to submit stock adjustment');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,26 +93,39 @@ export const AdjustmentCreate: React.FC = () => {
       >
         <button
           type="button"
+          disabled={isSubmitting}
           onClick={() => handleSubmit(false)}
-          className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
+          className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white text-slate-800"
         >
           Save Draft
         </button>
         <button
           type="button"
+          disabled={isSubmitting}
           onClick={() => handleSubmit(true)}
           className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs flex items-center gap-1.5 px-3.5"
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
+          {isSubmitting ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          )}
           Apply ({difference >= 0 ? `+${difference}` : difference})
         </button>
       </PageHeader>
+
+      {errorMessage && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ProductSelect
             value={selectedProductId}
-            onChange={(id) => handleProductSelect(id)}
+            onChange={(id, prod) => handleProductSelect(id, prod)}
             label="1. Select Product to Adjust"
             required
           />
@@ -122,7 +159,7 @@ export const AdjustmentCreate: React.FC = () => {
               min="0"
               value={physicalCount}
               onChange={(e) => setPhysicalCount(Number(e.target.value))}
-              className="input input-sm input-bordered w-20 text-center text-base font-bold bg-slate-50 border border-slate-300 rounded-lg mx-auto"
+              className="input input-sm input-bordered w-24 text-center text-base font-bold bg-slate-50 border border-slate-300 rounded-lg mx-auto"
             />
           </div>
 
@@ -157,7 +194,7 @@ export const AdjustmentCreate: React.FC = () => {
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. 3 units damaged during handling"
+            placeholder="e.g. 3 units damaged during handling or count discrepancy"
             className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
           />
         </div>

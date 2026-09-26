@@ -7,14 +7,21 @@ import { resolveCategoryId, formatProductResponse } from "./product.helper";
 
 /**
  * PUT /:id & PATCH /:id
- * Update product master information.
+ * Update product master information. Supports lookup by UUID or SKU.
  */
 export async function updateProductHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
     if (!id) {
-      return c.json({ success: false, message: "Product ID is required" }, 400);
+      return c.json(
+        {
+          success: false,
+          message: "Product identifier is required",
+        },
+        400
+      );
     }
+
     const body = await c.req.json();
     const parsed = updateProductSchema.safeParse(body);
 
@@ -29,20 +36,29 @@ export async function updateProductHandler(c: Context) {
       );
     }
 
-    // 1. Check existing product
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
+
+    // 1. Check existing product by UUID or SKU
     const existing = await db.query.products.findFirst({
-      where: eq(products.id, id),
+      where: isUuid
+        ? eq(products.id, id)
+        : eq(products.sku, id.toUpperCase()),
     });
 
     if (!existing) {
       return c.json(
         {
           success: false,
-          message: "Product not found",
+          message: `Product '${id}' not found`,
         },
         404
       );
     }
+
+    const productId = existing.id;
 
     const {
       name,
@@ -56,13 +72,15 @@ export async function updateProductHandler(c: Context) {
       minStockAlert,
       reorderQty,
       isActive,
+      costPrice,
+      sellingPrice,
     } = parsed.data;
 
     // 2. If SKU changes, verify uniqueness
     if (sku && sku.trim().toUpperCase() !== existing.sku.toUpperCase()) {
       const newSku = sku.trim().toUpperCase();
       const skuConflict = await db.query.products.findFirst({
-        where: and(eq(products.sku, newSku), ne(products.id, id)),
+        where: and(eq(products.sku, newSku), ne(products.id, productId)),
       });
 
       if (skuConflict) {
@@ -97,11 +115,18 @@ export async function updateProductHandler(c: Context) {
     if (reorderQty !== undefined) updatePayload.reorderQty = reorderQty;
     if (isActive !== undefined) updatePayload.isActive = isActive;
 
-    await db.update(products).set(updatePayload).where(eq(products.id, id));
+    if (costPrice !== undefined) {
+      updatePayload.costPrice = costPrice !== null ? String(costPrice) : null;
+    }
+    if (sellingPrice !== undefined) {
+      updatePayload.sellingPrice = sellingPrice !== null ? String(sellingPrice) : null;
+    }
+
+    await db.update(products).set(updatePayload).where(eq(products.id, productId));
 
     // Reload product with relations
     const updated = await db.query.products.findFirst({
-      where: eq(products.id, id),
+      where: eq(products.id, productId),
       with: {
         category: true,
         stockLevels: {

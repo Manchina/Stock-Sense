@@ -16,11 +16,18 @@ export async function deleteProductHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
     if (!id) {
-      return c.json({ success: false, message: "Product ID is required" }, 400);
+      return c.json({ success: false, message: "Product identifier is required" }, 400);
     }
 
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
+
     const existing = await db.query.products.findFirst({
-      where: eq(products.id, id),
+      where: isUuid
+        ? eq(products.id, id)
+        : eq(products.sku, id.toUpperCase()),
     });
 
     if (!existing) {
@@ -33,9 +40,11 @@ export async function deleteProductHandler(c: Context) {
       );
     }
 
+    const productId = existing.id;
+
     // Check if referenced in immutable ledger first (fastest single lookup)
     const hasLedger = await db.query.stockLedger.findFirst({
-      where: eq(stockLedger.productId, id),
+      where: eq(stockLedger.productId, productId),
     });
 
     let isReferenced = !!hasLedger;
@@ -43,16 +52,16 @@ export async function deleteProductHandler(c: Context) {
     if (!isReferenced) {
       // Check operational lines sequentially if no ledger entry
       const hasReceipts = await db.query.receiptLines.findFirst({
-        where: eq(receiptLines.productId, id),
+        where: eq(receiptLines.productId, productId),
       });
       const hasDeliveries = !hasReceipts && (await db.query.deliveryLines.findFirst({
-        where: eq(deliveryLines.productId, id),
+        where: eq(deliveryLines.productId, productId),
       }));
       const hasTransfers = !hasReceipts && !hasDeliveries && (await db.query.transferLines.findFirst({
-        where: eq(transferLines.productId, id),
+        where: eq(transferLines.productId, productId),
       }));
       const hasAdjustments = !hasReceipts && !hasDeliveries && !hasTransfers && (await db.query.adjustmentLines.findFirst({
-        where: eq(adjustmentLines.productId, id),
+        where: eq(adjustmentLines.productId, productId),
       }));
 
       isReferenced = !!(hasReceipts || hasDeliveries || hasTransfers || hasAdjustments);
@@ -63,7 +72,7 @@ export async function deleteProductHandler(c: Context) {
       await db
         .update(products)
         .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(products.id, id));
+        .where(eq(products.id, productId));
 
       return c.json({
         success: true,
@@ -74,7 +83,7 @@ export async function deleteProductHandler(c: Context) {
     }
 
     // Unreferenced product can be safely deleted
-    await db.delete(products).where(eq(products.id, id));
+    await db.delete(products).where(eq(products.id, productId));
 
     return c.json({
       success: true,
