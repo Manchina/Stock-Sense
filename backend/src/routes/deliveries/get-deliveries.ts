@@ -1,15 +1,15 @@
 import { Context } from "hono";
 import { eq, desc, and, or, ilike, inArray } from "drizzle-orm";
 import { db } from "../../config/db";
-import { receipts, receiptLines } from "../../db/schema/receipts.schema";
+import { deliveryOrders, deliveryLines } from "../../db/schema/deliveries.schema";
 import { products } from "../../db/schema/products.schema";
-import { formatReceiptResponse } from "./receipt.helper";
+import { formatDeliveryResponse } from "./delivery.helper";
 
 /**
- * GET /api/v1/receipts
- * Fetch all goods receipts with filters (status, search query, warehouseId, pagination).
+ * GET /api/v1/deliveries
+ * Fetch all outgoing delivery orders with filters (status, search query, warehouseId, pagination).
  */
-export async function getReceiptsHandler(c: Context) {
+export async function getDeliveriesHandler(c: Context) {
   try {
     const search = c.req.query("search")?.trim();
     const status = c.req.query("status")?.trim();
@@ -21,19 +21,20 @@ export async function getReceiptsHandler(c: Context) {
     const conditions = [];
 
     if (status && status !== "all") {
-      conditions.push(eq(receipts.status, status as any));
+      conditions.push(eq(deliveryOrders.status, status as any));
     }
 
     if (warehouseId) {
-      conditions.push(eq(receipts.destinationWarehouseId, warehouseId));
+      conditions.push(eq(deliveryOrders.sourceWarehouseId, warehouseId));
     }
 
     if (search) {
       const searchPattern = `%${search}%`;
       const searchOrConditions = [
-        ilike(receipts.receiptNumber, searchPattern),
-        ilike(receipts.supplierName, searchPattern),
-        ilike(receipts.notes, searchPattern),
+        ilike(deliveryOrders.orderNumber, searchPattern),
+        ilike(deliveryOrders.customerName, searchPattern),
+        ilike(deliveryOrders.customerRef, searchPattern),
+        ilike(deliveryOrders.notes, searchPattern),
       ];
 
       const matchingProducts = await db.query.products.findMany({
@@ -42,17 +43,17 @@ export async function getReceiptsHandler(c: Context) {
       });
 
       if (matchingProducts.length > 0) {
-        const matchingLines = await db.query.receiptLines.findMany({
+        const matchingLines = await db.query.deliveryLines.findMany({
           where: inArray(
-            receiptLines.productId,
+            deliveryLines.productId,
             matchingProducts.map((p) => p.id)
           ),
-          columns: { receiptId: true },
+          columns: { deliveryId: true },
         });
 
-        const receiptIds = matchingLines.map((l) => l.receiptId);
-        if (receiptIds.length > 0) {
-          searchOrConditions.push(inArray(receipts.id, receiptIds));
+        const deliveryIds = matchingLines.map((l) => l.deliveryId);
+        if (deliveryIds.length > 0) {
+          searchOrConditions.push(inArray(deliveryOrders.id, deliveryIds));
         }
       }
 
@@ -61,11 +62,11 @@ export async function getReceiptsHandler(c: Context) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const allReceipts = await db.query.receipts.findMany({
+    const allDeliveries = await db.query.deliveryOrders.findMany({
       where: whereClause,
       with: {
-        destinationWarehouse: true,
-        destinationLocation: {
+        sourceWarehouse: true,
+        sourceLocation: {
           with: { warehouse: true },
         },
         creator: true,
@@ -76,12 +77,12 @@ export async function getReceiptsHandler(c: Context) {
           },
         },
       },
-      orderBy: [desc(receipts.createdAt)],
+      orderBy: [desc(deliveryOrders.createdAt)],
       limit,
       offset,
     });
 
-    const formatted = allReceipts.map(formatReceiptResponse);
+    const formatted = allDeliveries.map(formatDeliveryResponse);
 
     return c.json({
       success: true,
@@ -89,11 +90,11 @@ export async function getReceiptsHandler(c: Context) {
       data: formatted,
     });
   } catch (error) {
-    console.error("Error fetching receipts:", error);
+    console.error("Error fetching deliveries:", error);
     return c.json(
       {
         success: false,
-        message: "Failed to retrieve receipts",
+        message: "Failed to retrieve delivery orders",
         error: error instanceof Error ? error.message : String(error),
       },
       500

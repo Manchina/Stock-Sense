@@ -41,11 +41,14 @@ export async function updateReceiptHandler(c: Context) {
       return c.json({ success: false, message: `Receipt with ID '${id}' not found` }, 404);
     }
 
-    if (existing.status === "done") {
+    if (existing.status === "done" || existing.status === "canceled") {
       return c.json(
         {
           success: false,
-          message: "Cannot modify a validated receipt.",
+          message:
+            existing.status === "done"
+              ? "Cannot modify a validated receipt."
+              : "Cannot modify a canceled receipt.",
         },
         400
       );
@@ -64,6 +67,38 @@ export async function updateReceiptHandler(c: Context) {
       items,
     } = parsed.data;
 
+    if (newStatus === "done") {
+      return c.json(
+        {
+          success: false,
+          message:
+            "Direct completion via update is not permitted. Please use POST /api/v1/receipts/:id/validate to credit inventory atomically.",
+        },
+        400
+      );
+    }
+
+    if (newStatus === "canceled") {
+      return c.json(
+        {
+          success: false,
+          message:
+            "Direct cancellation via update is not permitted. Please use POST /api/v1/receipts/:id/cancel.",
+        },
+        400
+      );
+    }
+
+    if (items !== undefined && items.length === 0) {
+      return c.json(
+        {
+          success: false,
+          message: "Receipt must contain at least one product item.",
+        },
+        400
+      );
+    }
+
     const supplierName = inputSupplier || inputPartner;
 
     await db.transaction(async (tx) => {
@@ -74,7 +109,9 @@ export async function updateReceiptHandler(c: Context) {
 
       if (supplierName !== undefined) updateData.supplierName = supplierName.trim();
       if (notes !== undefined) updateData.notes = notes?.trim() || null;
-      if (newStatus !== undefined) updateData.status = newStatus;
+      if (newStatus !== undefined) {
+        updateData.status = newStatus;
+      }
       if (expectedDate !== undefined || scheduledDate !== undefined) {
         const d = scheduledDate || expectedDate;
         updateData.expectedDate = d ? new Date(d) : null;
@@ -93,12 +130,11 @@ export async function updateReceiptHandler(c: Context) {
       await tx.update(receipts).set(updateData).where(eq(receipts.id, id));
 
       // 2. Synchronize line items if provided
-      if (items !== undefined) {
+      if (items !== undefined && items.length > 0) {
         await tx.delete(receiptLines).where(eq(receiptLines.receiptId, id));
 
         for (const item of items) {
           const qty = item.quantity ?? item.qtyExpected ?? 1;
-          const qtyRcv = item.qtyReceived ?? 0;
 
           const prod = await tx.query.products.findFirst({
             where: eq(products.id, item.productId),
@@ -112,7 +148,7 @@ export async function updateReceiptHandler(c: Context) {
             receiptId: id,
             productId: item.productId,
             qtyExpected: qty,
-            qtyReceived: qtyRcv,
+            qtyReceived: 0,
           });
         }
       }

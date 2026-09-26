@@ -4,12 +4,16 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Breadcrumbs } from './Breadcrumbs';
 import { useUiStore } from '../../store/uiStore';
+import { ToastContainer } from '../ui/ToastContainer';
 
 export const AppLayout: React.FC = () => {
   const { sidebarOpen, setSidebarOpen } = useUiStore();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+      {/* Global Toast & Zod Notification Container */}
+      <ToastContainer />
+
       {/* Backdrop for mobile drawer */}
       {sidebarOpen && (
         <div

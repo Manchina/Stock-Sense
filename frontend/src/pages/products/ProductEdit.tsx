@@ -6,6 +6,7 @@ import { ProductForm } from '../../features/products/components/ProductForm';
 import { ProductFormData } from '../../features/products/types';
 import { productsApi } from '../../features/products/api';
 import { Product } from '../../types/common';
+import { toast } from '../../context/ToastContext';
 
 export const ProductEdit: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
@@ -30,8 +31,10 @@ export const ProductEdit: React.FC = () => {
     setErrorMsg(null);
     try {
       await productsApi.update(productId, data);
+      toast.success('Product details updated successfully.', 'Product Updated');
       navigate(`/products/${productId}`);
     } catch (err: any) {
+      toast.zod(err, 'Failed to update product');
       setErrorMsg(err?.message || 'Failed to update product');
     } finally {
       setIsSaving(false);

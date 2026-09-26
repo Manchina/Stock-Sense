@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { KeyRound, Lock, CheckCircle2, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
+import { toast } from '../../context/ToastContext';
 
 export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -51,7 +52,9 @@ export const ResetPassword: React.FC = () => {
     e.preventDefault();
     const code = otp.join('');
     if (code.length !== 6) {
-      setErrorMsg('Please enter all 6 digits of the OTP code.');
+      const msg = 'Please enter all 6 digits of the OTP code.';
+      setErrorMsg(msg);
+      toast.error(msg, 'Invalid Code');
       return;
     }
 
@@ -72,6 +75,7 @@ export const ResetPassword: React.FC = () => {
       });
 
       setIsSuccess(true);
+      toast.success('Password updated successfully! Redirecting to sign in...', 'Password Reset');
       setTimeout(() => {
         navigate('/login');
       }, 2000);

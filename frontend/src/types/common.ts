@@ -37,27 +37,43 @@ export interface Product {
 }
 
 export interface OperationItem {
+  id?: string;
   productId: string;
   productName: string;
   sku: string;
   quantity: number;
+  qtyExpected?: number;
+  qtyReceived?: number;
+  qtyOrdered?: number;
+  qtyPicked?: number;
+  qtyDelivered?: number;
   unitOfMeasure: string;
 }
 
 export interface OperationDocument {
   id: string;
   documentNumber: string;
+  orderNumber?: string;
   type: DocumentType;
   status: OperationStatus;
   partner?: string; // Vendor for receipts, Customer for deliveries
+  customerName?: string;
+  customerRef?: string;
+  supplierName?: string;
   sourceLocation?: string;
   destinationLocation?: string;
+  sourceWarehouseId?: string;
+  sourceLocationId?: string;
+  destinationWarehouseId?: string;
+  destinationLocationId?: string;
   items: OperationItem[];
   notes?: string;
   createdAt: string;
+  updatedAt?: string;
   scheduledDate?: string;
   validatedAt?: string;
   validatedBy?: string;
+  createdBy?: string;
 }
 
 export interface MoveHistoryRecord {

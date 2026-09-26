@@ -22,6 +22,7 @@ import { OperationDocument, OperationItem, OperationStatus, Product } from '../.
 import { receiptsApi } from '../../../features/receipts/api';
 import { productsApi } from '../../../features/products/api';
 import { cn } from '../../../lib/utils';
+import { toast } from '../../../context/ToastContext';
 
 interface CreationStage {
   id: OperationStatus;
@@ -49,16 +50,9 @@ const CREATION_STAGES: CreationStage[] = [
   {
     id: 'ready',
     title: 'At Intake Bay',
-    subtitle: 'Arrived at dock for inspection',
+    subtitle: 'Arrived at dock for inspection & verification',
     icon: PackageCheck,
-    badge: 'Stage 3',
-  },
-  {
-    id: 'done',
-    title: 'Delivered & Stored',
-    subtitle: 'Immediate ledger credit & restock',
-    icon: Warehouse,
-    badge: 'Stage 4 (Direct Credit)',
+    badge: 'Stage 3 (Ready for Check-in)',
   },
 ];
 
@@ -80,20 +74,16 @@ export const ReceiptCreate: React.FC = () => {
       if (loaded && loaded.length > 0) {
         setAvailableProducts(loaded);
         setItems((prev) => {
-          if (prev.length > 0 && prev[0].productId) {
-            const match = loaded.find((p) => p.id === prev[0].productId);
-            if (match) {
-              return prev.map((it, idx) =>
-                idx === 0
-                  ? {
-                      ...it,
-                      productName: match.name,
-                      sku: match.sku,
-                      unitOfMeasure: match.unitOfMeasure || 'Units (pcs)',
-                    }
-                  : it
-              );
-            }
+          if (prev.length === 1 && (prev[0].productId === 'prod-1' || !loaded.some((p) => p.id === prev[0].productId))) {
+            return [
+              {
+                productId: loaded[0].id,
+                productName: loaded[0].name,
+                sku: loaded[0].sku,
+                quantity: 50,
+                unitOfMeasure: loaded[0].unitOfMeasure || 'Units (pcs)',
+              },
+            ];
           }
           return prev;
         });
@@ -163,17 +153,20 @@ export const ReceiptCreate: React.FC = () => {
 
   const handleSubmit = async (overrideStatus?: OperationStatus) => {
     if (!partner.trim()) {
-      setErrorMsg('Please specify a supplier / vendor name.');
+      const msg = 'Please specify a supplier / vendor name.';
+      setErrorMsg(msg);
+      toast.error(msg, 'Supplier Required');
       return;
     }
 
     if (items.length === 0) {
-      setErrorMsg('Please add at least one product row.');
+      const msg = 'Please add at least one product row.';
+      setErrorMsg(msg);
+      toast.error(msg, 'Line Items Required');
       return;
     }
 
     const targetStatus = overrideStatus || initialStatus;
-    const isDone = targetStatus === 'done';
 
     setIsSubmitting(true);
     setErrorMsg(null);
@@ -185,7 +178,6 @@ export const ReceiptCreate: React.FC = () => {
       scheduledDate,
       expectedDate: scheduledDate,
       notes: notes.trim() || undefined,
-      validateImmediately: isDone,
       status: targetStatus,
       items: items.map((i) => ({
         productId: i.productId,
@@ -193,7 +185,7 @@ export const ReceiptCreate: React.FC = () => {
         sku: i.sku,
         quantity: i.quantity,
         qtyExpected: i.quantity,
-        qtyReceived: isDone ? i.quantity : 0,
+        qtyReceived: 0,
         unitOfMeasure: i.unitOfMeasure,
       })),
     };
@@ -201,35 +193,15 @@ export const ReceiptCreate: React.FC = () => {
     try {
       const res = await receiptsApi.createReceipt(payload);
       if (res && res.data) {
-        // Also update local mock fallback
         INITIAL_OPERATIONS.unshift(res.data);
+        toast.success(`Receipt ${res.data.documentNumber} created in status '${res.data.status}'.`, 'Receipt Created');
         navigate(`/operations/receipts/${res.data.id}`);
         return;
       }
     } catch (err: any) {
-      console.warn('API creation failed, using local offline fallback:', err);
-      // Fallback
-      const docNumber = `REC-${new Date().getFullYear()}-${String(
-        Math.floor(Math.random() * 9000) + 1000
-      )}`;
-
-      const fallbackReceipt: OperationDocument = {
-        id: `op-rec-${Date.now()}`,
-        documentNumber: docNumber,
-        type: 'receipt',
-        status: targetStatus,
-        partner: payload.partner,
-        destinationLocation: payload.destinationLocation,
-        items: items,
-        notes: payload.notes,
-        createdAt: new Date().toISOString(),
-        scheduledDate,
-        validatedAt: isDone ? new Date().toISOString() : undefined,
-        validatedBy: isDone ? 'Inventory Manager' : undefined,
-      };
-
-      INITIAL_OPERATIONS.unshift(fallbackReceipt);
-      navigate(`/operations/receipts/${fallbackReceipt.id}`);
+      console.warn('API creation error:', err);
+      toast.zod(err, 'Failed to create receipt');
+      setErrorMsg(err?.message || 'Failed to create receipt.');
     } finally {
       setIsSubmitting(false);
     }
@@ -240,13 +212,11 @@ export const ReceiptCreate: React.FC = () => {
   const getSubmitButtonLabel = () => {
     switch (initialStatus) {
       case 'draft':
-        return 'Create Receipt (Starts at Order Placed)';
+        return 'Create Receipt (Order Placed)';
       case 'waiting':
-        return 'Create Receipt (Starts at In Transit)';
+        return 'Create Receipt (In Transit)';
       case 'ready':
-        return 'Create Receipt (Starts at At Intake Bay)';
-      case 'done':
-        return `Create Receipt & Direct Restock (+${totalQty})`;
+        return 'Create Receipt (At Intake Bay)';
       default:
         return 'Create Receipt';
     }
@@ -256,7 +226,7 @@ export const ReceiptCreate: React.FC = () => {
     <div className="w-full space-y-5">
       <PageHeader
         title="Create Inbound Stock Receipt"
-        subtitle="Initialize incoming shipment from vendor. Step through Order Placed ➔ In Transit ➔ At Intake Bay ➔ Delivered & Stored."
+        subtitle="Initialize incoming shipment from vendor. Step through Order Placed ➔ In Transit ➔ At Intake Bay ➔ Validate & Restock."
         backUrl="/operations/receipts"
       >
         <button
@@ -273,14 +243,7 @@ export const ReceiptCreate: React.FC = () => {
           type="button"
           disabled={isSubmitting}
           onClick={() => handleSubmit()}
-          className={cn(
-            'btn btn-sm rounded-xl font-black text-white shadow-xs flex items-center gap-2 px-4 transition-all',
-            initialStatus === 'done'
-              ? 'btn-success bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
-              : initialStatus === 'ready'
-              ? 'btn-warning bg-amber-600 hover:bg-amber-700 border-amber-600 text-white'
-              : 'btn-primary bg-blue-600 hover:bg-blue-700 border-blue-600'
-          )}
+          className="btn btn-primary btn-sm rounded-xl font-black text-white shadow-xs flex items-center gap-2 px-4 transition-all bg-blue-600 hover:bg-blue-700 border-blue-600"
         >
           {isSubmitting ? (
             <span className="loading loading-spinner loading-xs" />
@@ -485,21 +448,13 @@ export const ReceiptCreate: React.FC = () => {
                   />
                 </div>
 
-                <div className="w-full sm:w-36">
+                <div className="w-full sm:w-32">
                   <label className="label py-0.5 mb-0.5">
-                    <span className="label-text font-bold text-xs text-slate-700">Unit</span>
+                    <span className="label-text font-bold text-xs text-slate-700">Unit of Measure</span>
                   </label>
-                  <select
-                    value={item.unitOfMeasure || 'Units (pcs)'}
-                    onChange={(e) => handleUnitChange(idx, e.target.value)}
-                    className="select select-bordered select-sm w-full bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-xl"
-                  >
-                    {UNITS_OF_MEASURE.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="h-8 min-h-8 px-3 flex items-center bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
+                    {item.unitOfMeasure || 'Units (pcs)'}
+                  </div>
                 </div>
 
                 {items.length > 1 && (

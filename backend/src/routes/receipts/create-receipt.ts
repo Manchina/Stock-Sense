@@ -9,13 +9,13 @@ import {
   resolveDefaultUserId,
   formatReceiptResponse,
 } from "./receipt.helper";
-import { executeStockMovement } from "../../services/stock.service";
 import { eq } from "drizzle-orm";
+
+import { executeStockMovement } from "../../services/stock.service";
 
 /**
  * POST /api/v1/receipts
  * Create a new incoming stock receipt document.
- * If validateImmediately is true (or status is 'done'), automatically records stock ledger movements.
  */
 export async function createReceiptHandler(c: Context) {
   try {
@@ -62,7 +62,7 @@ export async function createReceiptHandler(c: Context) {
     const currentUser = c.get("user") as { id: string; name?: string } | undefined;
     const userId = await resolveDefaultUserId(currentUser?.id);
 
-    // 3. Determine status
+    // 3. Determine status & validation
     const shouldValidate = validateImmediately || requestedStatus === "done";
     const initialStatus = shouldValidate ? "done" : requestedStatus || "draft";
     const receiptNumber = generateReceiptNumber();
@@ -94,7 +94,7 @@ export async function createReceiptHandler(c: Context) {
       // Insert line items
       for (const item of items) {
         const qty = item.quantity ?? item.qtyExpected ?? 1;
-        const qtyRcv = shouldValidate ? item.qtyReceived ?? qty : item.qtyReceived ?? 0;
+        const qtyReceived = shouldValidate ? qty : 0;
 
         // Verify product exists
         const prod = await tx.query.products.findFirst({
@@ -109,15 +109,15 @@ export async function createReceiptHandler(c: Context) {
           receiptId: insertedReceipt.id,
           productId: item.productId,
           qtyExpected: qty,
-          qtyReceived: qtyRcv,
+          qtyReceived,
         });
 
-        // If validated immediately, execute stock movement (+In) into stock ledger
+        // Credit stock if immediate validation is requested
         if (shouldValidate && facility.locationId) {
           await executeStockMovement(tx, {
             productId: item.productId,
             locationId: facility.locationId,
-            deltaQty: qtyRcv > 0 ? qtyRcv : qty,
+            deltaQty: qtyReceived,
             sourceType: "receipt",
             sourceId: insertedReceipt.id,
             notes: `Receipt ${receiptNumber} from ${supplierName}`,
@@ -154,9 +154,7 @@ export async function createReceiptHandler(c: Context) {
     return c.json(
       {
         success: true,
-        message: shouldValidate
-          ? `Receipt ${receiptNumber} created and validated (+stock incremented in ledger)`
-          : `Receipt ${receiptNumber} created in status '${initialStatus}'`,
+        message: `Receipt ${receiptNumber} created in status '${initialStatus}'. Stock will be incremented once validation is completed.`,
         data: formatReceiptResponse(fullReceipt),
       },
       201

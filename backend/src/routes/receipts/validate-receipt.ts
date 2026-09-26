@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../../config/db";
 import { receipts, receiptLines } from "../../db/schema/receipts.schema";
 import { locations } from "../../db/schema/warehouses.schema";
@@ -78,8 +78,8 @@ export async function validateReceiptHandler(c: Context) {
 
     // Atomic validation & ledger write
     await db.transaction(async (tx) => {
-      // 1. Update receipt header
-      await tx
+      // 1. Conditional update to prevent concurrent double-credit
+      const [lockedReceipt] = await tx
         .update(receipts)
         .set({
           status: "done",
@@ -88,7 +88,20 @@ export async function validateReceiptHandler(c: Context) {
           validatedBy: userId,
           updatedAt: new Date(),
         })
-        .where(eq(receipts.id, id));
+        .where(
+          and(
+            eq(receipts.id, id),
+            ne(receipts.status, "done"),
+            ne(receipts.status, "canceled")
+          )
+        )
+        .returning();
+
+      if (!lockedReceipt) {
+        throw new Error(
+          `Receipt '${existingReceipt.receiptNumber}' has already been processed or canceled by another request.`
+        );
+      }
 
       // 2. Iterate each line item, mark qtyReceived = qtyExpected, and execute stock movement
       for (const line of existingReceipt.lines) {

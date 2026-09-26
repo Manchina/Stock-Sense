@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../../config/db";
 import { receipts } from "../../db/schema/receipts.schema";
 import { formatReceiptResponse } from "./receipt.helper";
@@ -16,31 +16,42 @@ export async function cancelReceiptHandler(c: Context) {
       return c.json({ success: false, message: "Receipt ID is required" }, 400);
     }
 
-    const existingReceipt = await db.query.receipts.findFirst({
-      where: eq(receipts.id, id),
-    });
-
-    if (!existingReceipt) {
-      return c.json({ success: false, message: `Receipt with ID '${id}' not found` }, 404);
-    }
-
-    if (existingReceipt.status === "done") {
-      return c.json(
-        {
-          success: false,
-          message: "Cannot cancel a receipt that has already been validated. Use Inventory Adjustments to reverse stock.",
-        },
-        400
-      );
-    }
-
-    await db
+    const [canceledReceipt] = await db
       .update(receipts)
       .set({
         status: "canceled",
         updatedAt: new Date(),
       })
-      .where(eq(receipts.id, id));
+      .where(
+        and(
+          eq(receipts.id, id),
+          ne(receipts.status, "done"),
+          ne(receipts.status, "canceled")
+        )
+      )
+      .returning();
+
+    if (!canceledReceipt) {
+      const existing = await db.query.receipts.findFirst({
+        where: eq(receipts.id, id),
+      });
+
+      if (!existing) {
+        return c.json({ success: false, message: `Receipt with ID '${id}' not found` }, 404);
+      }
+
+      if (existing.status === "done") {
+        return c.json(
+          {
+            success: false,
+            message: "Cannot cancel a receipt that has already been validated. Use Inventory Adjustments to reverse stock.",
+          },
+          400
+        );
+      }
+
+      return c.json({ success: false, message: "Receipt is already canceled." }, 400);
+    }
 
     const updated = await db.query.receipts.findFirst({
       where: eq(receipts.id, id),

@@ -67,13 +67,17 @@ export async function executeStockMovement(
     allowNegative = false,
   } = input;
 
-  // 1. Fetch current stock balance for (productId, locationId)
-  const existingLevel = await tx.query.stockLevels.findFirst({
-    where: and(
-      eq(stockLevels.productId, productId),
-      eq(stockLevels.locationId, locationId)
-    ),
-  });
+  // 1. Fetch and lock current stock balance for (productId, locationId) inside transaction
+  const [existingLevel] = await tx
+    .select()
+    .from(stockLevels)
+    .where(
+      and(
+        eq(stockLevels.productId, productId),
+        eq(stockLevels.locationId, locationId)
+      )
+    )
+    .for("update");
 
   const previousBalance = existingLevel?.quantity ?? 0;
   const newBalance = previousBalance + deltaQty;

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Boxes, Lock, Mail, ArrowRight, Shield, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { toast } from '../../context/ToastContext';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,8 +16,10 @@ export const Login: React.FC = () => {
     setErrorMsg(null);
     try {
       await login(email.trim(), password);
+      toast.success('Signed in successfully! Welcome back.', 'Authentication');
       navigate('/dashboard');
-    } catch (err: unknown) {
+    } catch (err: any) {
+      toast.zod(err, 'Sign In Failed');
       setErrorMsg(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
     }
   };

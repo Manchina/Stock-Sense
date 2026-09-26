@@ -1,39 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Save, PackageCheck, Box, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { ProductSelect } from '../../../components/inventory/ProductSelect';
 import { WarehouseSelect } from '../../../components/inventory/WarehouseSelect';
 import { QuantityInput } from '../../../components/inventory/QuantityInput';
-import { INITIAL_PRODUCTS, INITIAL_OPERATIONS, UNITS_OF_MEASURE } from '../../../lib/constants';
-import { OperationDocument, OperationItem, Product } from '../../../types/common';
+import { INITIAL_PRODUCTS, UNITS_OF_MEASURE } from '../../../lib/constants';
+import { OperationItem, Product } from '../../../types/common';
 import { productsApi } from '../../../features/products/api';
+import { deliveriesApi } from '../../../features/deliveries/api';
+import { toast } from '../../../context/ToastContext';
 
 export const DeliveryCreate: React.FC = () => {
   const navigate = useNavigate();
   const [partner, setPartner] = useState('');
+  const [customerRef, setCustomerRef] = useState('');
   const [sourceLocation, setSourceLocation] = useState('WH-MAIN / Packing Zone');
   const [notes, setNotes] = useState('');
   const [scheduledDate, setScheduledDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
   const [availableProducts, setAvailableProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     productsApi.getAll().then((loaded) => {
       if (loaded && loaded.length > 0) {
         setAvailableProducts(loaded);
+        setItems((prev) => {
+          if (prev.length === 1 && (prev[0].productId === 'prod-1' || !loaded.some((p) => p.id === prev[0].productId))) {
+            return [
+              {
+                productId: loaded[0].id,
+                productName: loaded[0].name,
+                sku: loaded[0].sku,
+                quantity: 5,
+                unitOfMeasure: loaded[0].unitOfMeasure || 'Units (pcs)',
+              },
+            ];
+          }
+          return prev;
+        });
       }
     });
   }, []);
 
   const [items, setItems] = useState<OperationItem[]>([
     {
-      productId: INITIAL_PRODUCTS[1]?.id || 'prod-2',
-      productName: INITIAL_PRODUCTS[1]?.name || 'Hex Bolts M8',
-      sku: INITIAL_PRODUCTS[1]?.sku || 'FAST-BOLT-M8',
-      quantity: 10,
-      unitOfMeasure: INITIAL_PRODUCTS[1]?.unitOfMeasure || 'Units (pcs)',
+      productId: availableProducts[0]?.id || 'prod-1',
+      productName: availableProducts[0]?.name || 'Industrial Steel Flange',
+      sku: availableProducts[0]?.sku || 'STL-FLANGE-01',
+      quantity: 5,
+      unitOfMeasure: availableProducts[0]?.unitOfMeasure || 'Units (pcs)',
     },
   ]);
 
@@ -42,11 +61,11 @@ export const DeliveryCreate: React.FC = () => {
     setItems([
       ...items,
       {
-        productId: defaultProd.id,
-        productName: defaultProd.name,
-        sku: defaultProd.sku,
+        productId: defaultProd?.id || 'prod-1',
+        productName: defaultProd?.name || 'Industrial Steel Flange',
+        sku: defaultProd?.sku || 'STL-FLANGE-01',
         quantity: 5,
-        unitOfMeasure: defaultProd.unitOfMeasure || 'Units (pcs)',
+        unitOfMeasure: defaultProd?.unitOfMeasure || 'Units (pcs)',
       },
     ]);
   };
@@ -83,59 +102,123 @@ export const DeliveryCreate: React.FC = () => {
 
   const handleQuantityChange = (index: number, quantity: number) => {
     const updated = [...items];
-    updated[index].quantity = quantity;
+    updated[index].quantity = Math.max(1, quantity);
     setItems(updated);
   };
 
-  const handleSubmit = (status: 'draft' | 'waiting' | 'ready' | 'done') => {
-    const docNumber = `DEL-${new Date().getFullYear()}-${String(
-      Math.floor(Math.random() * 9000) + 1000
-    )}`;
+  const handleSubmit = async (status: 'draft' | 'waiting' | 'ready' | 'done') => {
+    setErrorMessage(null);
 
-    const newDelivery: OperationDocument = {
-      id: `op-del-${Date.now()}`,
-      documentNumber: docNumber,
-      type: 'delivery',
-      status,
-      partner,
-      sourceLocation,
-      items,
-      notes,
-      createdAt: new Date().toISOString(),
-      scheduledDate,
-      validatedAt: status === 'done' ? new Date().toISOString() : undefined,
-      validatedBy: status === 'done' ? 'Sarah Connor (Inventory Manager)' : undefined,
-    };
+    if (!partner.trim()) {
+      const msg = 'Please enter the customer / recipient name.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Customer Required');
+      return;
+    }
 
-    INITIAL_OPERATIONS.unshift(newDelivery);
-    navigate(`/operations/deliveries/${newDelivery.id}`);
+    if (items.length === 0) {
+      const msg = 'Please add at least one line item to deliver.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Line Items Required');
+      return;
+    }
+
+    for (const item of items) {
+      if (!item.productId) {
+        const msg = 'Please select a valid product for all line items.';
+        setErrorMessage(msg);
+        toast.error(msg, 'Product Required');
+        return;
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        const msg = 'Line item quantity must be greater than 0.';
+        setErrorMessage(msg);
+        toast.error(msg, 'Invalid Quantity');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
+        customerName: partner.trim(),
+        partner: partner.trim(),
+        customerRef: customerRef.trim() || undefined,
+        sourceLocation,
+        scheduledDate: scheduledDate || undefined,
+        notes: notes.trim() || undefined,
+        status,
+        items: items.map((i) => ({
+          productId: i.productId,
+          productName: i.productName,
+          sku: i.sku,
+          quantity: Number(i.quantity) || 1,
+          qtyOrdered: Number(i.quantity) || 1,
+          qtyPicked: status === 'ready' ? Number(i.quantity) || 1 : 0,
+          qtyDelivered: 0,
+          unitOfMeasure: i.unitOfMeasure,
+        })),
+      };
+
+      const result = await deliveriesApi.create(payload);
+      if (result && result.data) {
+        toast.success(`Delivery ${result.data.documentNumber} created successfully.`, 'Delivery Created');
+        navigate(`/operations/deliveries/${result.data.id}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to create delivery:', err);
+      toast.zod(err, 'Failed to create delivery order');
+      setErrorMessage(err?.message || 'Failed to create delivery order.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const totalQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const totalQty = items.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0);
 
   return (
     <div className="w-full space-y-4">
       <PageHeader
         title="Create Outbound Delivery"
-        subtitle="Schedule customer order dispatch. Validating reduces recorded stock."
+        subtitle="Schedule customer order dispatch. Stock deduction occurs upon final inspection & validation."
         backUrl="/operations/deliveries"
       >
         <button
           type="button"
+          disabled={isSubmitting}
+          onClick={() => handleSubmit('draft')}
+          className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
+        >
+          <Save className="w-3.5 h-3.5 mr-1" />
+          Save Draft
+        </button>
+        <button
+          type="button"
+          disabled={isSubmitting}
           onClick={() => handleSubmit('waiting')}
           className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
         >
+          <Box className="w-3.5 h-3.5 mr-1" />
           Mark for Picking
         </button>
         <button
           type="button"
-          onClick={() => handleSubmit('done')}
+          disabled={isSubmitting}
+          onClick={() => handleSubmit('ready')}
           className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs flex items-center gap-1.5 px-3.5"
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Validate & Deduct (-{totalQty})
+          <PackageCheck className="w-3.5 h-3.5" />
+          {isSubmitting ? 'Creating...' : `Create Order (${totalQty} Items)`}
         </button>
       </PageHeader>
+
+      {errorMessage && (
+        <div className="alert alert-error rounded-xl shadow-xs py-2 px-4 flex items-center gap-2 text-xs font-semibold text-white">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -185,14 +268,27 @@ export const DeliveryCreate: React.FC = () => {
 
             <div className="form-control sm:col-span-2">
               <label className="label py-0.5 mb-0.5">
-                <span className="label-text font-bold text-xs text-slate-700">Sales Order / Reference</span>
+                <span className="label-text font-bold text-xs text-slate-700">Sales Order / Customer Ref</span>
               </label>
               <input
                 type="text"
+                value={customerRef}
+                onChange={(e) => setCustomerRef(e.target.value)}
+                placeholder="e.g. SO-8842 / PO-MW-882"
+                className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
+              />
+            </div>
+
+            <div className="form-control col-span-full">
+              <label className="label py-0.5 mb-0.5">
+                <span className="label-text font-bold text-xs text-slate-700">Notes & Dispatch Instructions</span>
+              </label>
+              <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. SO-8842 Priority Dispatch"
-                className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
+                placeholder="Add special packaging, carrier or delivery notes..."
+                rows={2}
+                className="textarea textarea-sm textarea-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
               />
             </div>
           </div>
@@ -234,21 +330,13 @@ export const DeliveryCreate: React.FC = () => {
                   />
                 </div>
 
-                <div className="w-full sm:w-36">
+                <div className="w-full sm:w-32">
                   <label className="label py-0.5 mb-0.5">
-                    <span className="label-text font-bold text-xs text-slate-700">Unit</span>
+                    <span className="label-text font-bold text-xs text-slate-700">Unit of Measure</span>
                   </label>
-                  <select
-                    value={item.unitOfMeasure || 'Units (pcs)'}
-                    onChange={(e) => handleUnitChange(idx, e.target.value)}
-                    className="select select-bordered select-sm w-full bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-xl"
-                  >
-                    {UNITS_OF_MEASURE.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="h-8 min-h-8 px-3 flex items-center bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
+                    {item.unitOfMeasure || 'Units (pcs)'}
+                  </div>
                 </div>
 
                 {items.length > 1 && (

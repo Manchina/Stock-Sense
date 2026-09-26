@@ -4,12 +4,12 @@ import { warehouses, locations } from "../../db/schema/warehouses.schema";
 import { users } from "../../db/schema/users.schema";
 
 /**
- * Generates a clean human-readable receipt number (e.g. REC-2026-1042)
+ * Generates a clean human-readable delivery order number (e.g. DEL-2026-1042)
  */
-export function generateReceiptNumber(): string {
+export function generateDeliveryNumber(): string {
   const year = new Date().getFullYear();
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  return `REC-${year}-${randomSuffix}`;
+  return `DEL-${year}-${randomSuffix}`;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -18,29 +18,29 @@ export function isUuid(str: string): boolean {
 }
 
 /**
- * Resolves warehouseId and locationId from IDs or human-readable strings (e.g. "WH-MAIN / Rack A")
+ * Resolves warehouseId and locationId from IDs or human-readable strings (e.g. "WH-MAIN / Packing Zone")
  */
-export async function resolveDestinationFacility(options: {
-  destinationWarehouseId?: string;
-  destinationLocationId?: string;
-  destinationWarehouse?: string;
-  destinationLocation?: string;
+export async function resolveSourceFacility(options: {
+  sourceWarehouseId?: string;
+  sourceLocationId?: string;
+  sourceWarehouse?: string;
+  sourceLocation?: string;
 }): Promise<{
   warehouseId: string;
   locationId: string | null;
   locationLabel: string;
 }> {
   const {
-    destinationWarehouseId,
-    destinationLocationId,
-    destinationWarehouse,
-    destinationLocation,
+    sourceWarehouseId,
+    sourceLocationId,
+    sourceWarehouse,
+    sourceLocation,
   } = options;
 
-  // 1. If destinationLocationId is explicitly provided as UUID
-  if (destinationLocationId && isUuid(destinationLocationId)) {
+  // 1. If sourceLocationId is explicitly provided as UUID
+  if (sourceLocationId && isUuid(sourceLocationId)) {
     const loc = await db.query.locations.findFirst({
-      where: eq(locations.id, destinationLocationId),
+      where: eq(locations.id, sourceLocationId),
       with: { warehouse: true },
     });
 
@@ -53,9 +53,9 @@ export async function resolveDestinationFacility(options: {
     }
   }
 
-  // 2. Parse from destinationLocation string like "WH-MAIN / Rack A"
-  if (destinationLocation && destinationLocation.includes("/")) {
-    const [whPart, locPart] = destinationLocation.split("/").map((s) => s.trim());
+  // 2. Parse from sourceLocation string like "WH-MAIN / Packing Zone"
+  if (sourceLocation && sourceLocation.includes("/")) {
+    const [whPart, locPart] = sourceLocation.split("/").map((s) => s.trim());
     if (whPart && locPart) {
       const whConditions = [
         eq(warehouses.code, whPart.toUpperCase()),
@@ -87,7 +87,6 @@ export async function resolveDestinationFacility(options: {
           };
         }
 
-        // Return warehouse with first location or null location
         const firstLoc = wh.locations[0];
         return {
           warehouseId: wh.id,
@@ -99,14 +98,14 @@ export async function resolveDestinationFacility(options: {
   }
 
   // 3. Match warehouse by ID or Name
-  let targetWarehouseId = destinationWarehouseId;
-  if (!targetWarehouseId && destinationWarehouse) {
+  let targetWarehouseId = sourceWarehouseId;
+  if (!targetWarehouseId && sourceWarehouse) {
     const searchConditions = [
-      eq(warehouses.code, destinationWarehouse.toUpperCase()),
-      ilike(warehouses.name, `%${destinationWarehouse}%`),
+      eq(warehouses.code, sourceWarehouse.toUpperCase()),
+      ilike(warehouses.name, `%${sourceWarehouse}%`),
     ];
-    if (isUuid(destinationWarehouse)) {
-      searchConditions.push(eq(warehouses.id, destinationWarehouse));
+    if (isUuid(sourceWarehouse)) {
+      searchConditions.push(eq(warehouses.id, sourceWarehouse));
     }
 
     const foundWh = await db.query.warehouses.findFirst({
@@ -168,45 +167,47 @@ export async function resolveDefaultUserId(authUserId?: string | null): Promise<
 }
 
 /**
- * Formats a receipt with joined lines into frontend OperationDocument format
+ * Formats a delivery order with joined lines into frontend OperationDocument format
  */
-export function formatReceiptResponse(receipt: any) {
-  const destLocationLabel =
-    receipt.destinationLocation?.warehouse
-      ? `${receipt.destinationLocation.warehouse.code || receipt.destinationLocation.warehouse.name} / ${receipt.destinationLocation.name}`
-      : receipt.destinationWarehouse
-      ? `${receipt.destinationWarehouse.code || receipt.destinationWarehouse.name} / ${receipt.destinationLocation?.name || "Main Storage"}`
-      : "Main Warehouse / Receiving Bay";
+export function formatDeliveryResponse(delivery: any) {
+  const sourceLocationLabel =
+    delivery.sourceLocation?.warehouse
+      ? `${delivery.sourceLocation.warehouse.code || delivery.sourceLocation.warehouse.name} / ${delivery.sourceLocation.name}`
+      : delivery.sourceWarehouse
+      ? `${delivery.sourceWarehouse.code || delivery.sourceWarehouse.name} / ${delivery.sourceLocation?.name || "Packing Zone"}`
+      : "Main Warehouse / Dispatch Dock";
 
-  const formattedItems = (receipt.lines || []).map((line: any) => ({
+  const formattedItems = (delivery.lines || []).map((line: any) => ({
     id: line.id,
     productId: line.productId,
     productName: line.product?.name || "Inventory Product",
     sku: line.product?.sku || "SKU-UNKNOWN",
-    quantity: line.qtyExpected,
-    qtyExpected: line.qtyExpected,
-    qtyReceived: line.qtyReceived ?? 0,
-    unitOfMeasure: line.product?.unitOfMeasure || line.product?.uom || "Units (pcs)",
+    quantity: line.qtyDelivered > 0 ? line.qtyDelivered : line.qtyPicked > 0 ? line.qtyPicked : line.qtyOrdered,
+    qtyOrdered: line.qtyOrdered,
+    qtyPicked: line.qtyPicked,
+    qtyDelivered: line.qtyDelivered,
+    unitOfMeasure: line.product?.uom || "Units (pcs)",
   }));
 
   return {
-    id: receipt.id,
-    documentNumber: receipt.receiptNumber,
-    type: "receipt" as const,
-    status: receipt.status,
-    partner: receipt.supplierName,
-    supplierName: receipt.supplierName,
-    destinationWarehouseId: receipt.destinationWarehouseId,
-    destinationLocationId: receipt.destinationLocationId,
-    destinationLocation: destLocationLabel,
+    id: delivery.id,
+    documentNumber: delivery.orderNumber,
+    orderNumber: delivery.orderNumber,
+    type: "delivery" as const,
+    status: delivery.status,
+    partner: delivery.customerName,
+    customerName: delivery.customerName,
+    customerRef: delivery.customerRef || undefined,
+    sourceWarehouseId: delivery.sourceWarehouseId,
+    sourceLocationId: delivery.sourceLocationId,
+    sourceLocation: sourceLocationLabel,
     items: formattedItems,
-    notes: receipt.notes || "",
-    scheduledDate: receipt.expectedDate ? new Date(receipt.expectedDate).toISOString().slice(0, 10) : undefined,
-    expectedDate: receipt.expectedDate ? new Date(receipt.expectedDate).toISOString() : undefined,
-    createdAt: receipt.createdAt ? new Date(receipt.createdAt).toISOString() : new Date().toISOString(),
-    updatedAt: receipt.updatedAt ? new Date(receipt.updatedAt).toISOString() : new Date().toISOString(),
-    validatedAt: receipt.validatedAt ? new Date(receipt.validatedAt).toISOString() : undefined,
-    validatedBy: receipt.validator ? receipt.validator.name : undefined,
-    createdBy: receipt.creator ? receipt.creator.name : undefined,
+    notes: delivery.notes || "",
+    scheduledDate: delivery.scheduledDate ? new Date(delivery.scheduledDate).toISOString().slice(0, 10) : undefined,
+    createdAt: delivery.createdAt ? new Date(delivery.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: delivery.updatedAt ? new Date(delivery.updatedAt).toISOString() : new Date().toISOString(),
+    validatedAt: delivery.validatedAt ? new Date(delivery.validatedAt).toISOString() : undefined,
+    validatedBy: delivery.validator ? delivery.validator.name : undefined,
+    createdBy: delivery.creator ? delivery.creator.name : undefined,
   };
 }

@@ -12,7 +12,24 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
+import { formatZodApiError, FormattedZodError } from './zod-error-formatter';
+import { toast } from '../context/ToastContext';
+
+export class ApiError extends Error {
+  public status: number;
+  public data: any;
+  public zodError: FormattedZodError;
+
+  constructor(message: string, status: number, data: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+    this.zodError = formatZodApiError(data);
+  }
+}
+
+async function handleResponse<T>(res: Response, showToastOnError = true): Promise<T> {
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);
     const message =
@@ -22,7 +39,14 @@ async function handleResponse<T>(res: Response): Promise<T> {
         : null) ||
       errorData?.error ||
       `HTTP error ${res.status}`;
-    throw new Error(message);
+    const apiError = new ApiError(message, res.status, errorData);
+    
+    // Automatically trigger Zod error popup across entire application
+    if (showToastOnError && toast?.zod) {
+      toast.zod(apiError);
+    }
+
+    throw apiError;
   }
   return res.json();
 }

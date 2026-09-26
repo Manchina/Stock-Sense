@@ -5,6 +5,7 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { INITIAL_WAREHOUSES } from '../../../lib/constants';
 import { Warehouse } from '../../../types/common';
 import { api } from '../../../lib/api';
+import { toast } from '../../../context/ToastContext';
 
 export const WarehouseEdit: React.FC = () => {
   const { warehouseId } = useParams<{ warehouseId: string }>();
@@ -92,9 +93,11 @@ export const WarehouseEdit: React.FC = () => {
         wh.address = payload.address;
         wh.locations = payload.locations;
       }
+      toast.success(`Warehouse '${payload.name}' updated successfully.`, 'Warehouse Updated');
       navigate('/settings/warehouses');
     } catch (err: any) {
       console.warn('API update failed, updating local state:', err);
+      toast.zod(err, 'Failed to update warehouse');
       const wh = INITIAL_WAREHOUSES.find((w) => w.id === warehouseId);
       if (wh) {
         wh.name = payload.name;

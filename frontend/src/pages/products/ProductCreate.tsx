@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { ProductForm } from '../../features/products/components/ProductForm';
 import { ProductFormData } from '../../features/products/types';
 import { productsApi } from '../../features/products/api';
+import { toast } from '../../context/ToastContext';
 
 export const ProductCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -16,8 +17,10 @@ export const ProductCreate: React.FC = () => {
     setErrorMsg(null);
     try {
       const created = await productsApi.create(data);
+      toast.success(`Product '${created.name}' (${created.sku}) registered successfully!`, 'Product Registered');
       navigate(`/products/${created.id}`);
     } catch (err: any) {
+      toast.zod(err, 'Failed to register product');
       setErrorMsg(err?.message || 'Failed to register product');
     } finally {
       setIsLoading(false);
