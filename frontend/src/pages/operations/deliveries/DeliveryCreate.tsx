@@ -9,6 +9,7 @@ import { INITIAL_PRODUCTS, UNITS_OF_MEASURE } from '../../../lib/constants';
 import { OperationItem, Product } from '../../../types/common';
 import { productsApi } from '../../../features/products/api';
 import { deliveriesApi } from '../../../features/deliveries/api';
+import { toast } from '../../../context/ToastContext';
 
 export const DeliveryCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -95,22 +96,30 @@ export const DeliveryCreate: React.FC = () => {
     setErrorMessage(null);
 
     if (!partner.trim()) {
-      setErrorMessage('Please enter the customer / recipient name.');
+      const msg = 'Please enter the customer / recipient name.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Customer Required');
       return;
     }
 
     if (items.length === 0) {
-      setErrorMessage('Please add at least one line item to deliver.');
+      const msg = 'Please add at least one line item to deliver.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Line Items Required');
       return;
     }
 
     for (const item of items) {
       if (!item.productId) {
-        setErrorMessage('Please select a valid product for all line items.');
+        const msg = 'Please select a valid product for all line items.';
+        setErrorMessage(msg);
+        toast.error(msg, 'Product Required');
         return;
       }
       if (!item.quantity || item.quantity <= 0) {
-        setErrorMessage('Line item quantity must be greater than 0.');
+        const msg = 'Line item quantity must be greater than 0.';
+        setErrorMessage(msg);
+        toast.error(msg, 'Invalid Quantity');
         return;
       }
     }
@@ -140,10 +149,12 @@ export const DeliveryCreate: React.FC = () => {
 
       const result = await deliveriesApi.create(payload);
       if (result && result.data) {
+        toast.success(`Delivery ${result.data.documentNumber} created successfully.`, 'Delivery Created');
         navigate(`/operations/deliveries/${result.data.id}`);
       }
     } catch (err: any) {
       console.error('Failed to create delivery:', err);
+      toast.zod(err, 'Failed to create delivery order');
       setErrorMessage(err?.message || 'Failed to create delivery order.');
     } finally {
       setIsSubmitting(false);

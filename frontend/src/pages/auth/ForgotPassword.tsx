@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, ArrowRight, ArrowLeft, KeyRound, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
+import { toast } from '../../context/ToastContext';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -19,6 +20,7 @@ export const ForgotPassword: React.FC = () => {
         email,
       });
 
+      toast.success(`OTP code sent to ${email}.`, 'Verification Code Sent');
       const query = new URLSearchParams({ email });
       navigate(`/reset-password?${query.toString()}`);
     } catch (err: unknown) {

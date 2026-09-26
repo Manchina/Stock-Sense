@@ -5,6 +5,7 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { INITIAL_WAREHOUSES } from '../../../lib/constants';
 import { Warehouse } from '../../../types/common';
 import { api } from '../../../lib/api';
+import { toast } from '../../../context/ToastContext';
 
 export const WarehouseCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -41,13 +42,13 @@ export const WarehouseCreate: React.FC = () => {
     try {
       const res = await api.post<{ success: boolean; data: Warehouse; message?: string }>('/warehouses', payload);
       if (res && res.data) {
-        // Also update offline fallback list
         INITIAL_WAREHOUSES.push(res.data);
       }
+      toast.success(`Warehouse '${payload.name}' (${payload.code}) created successfully.`, 'Warehouse Created');
       navigate('/settings/warehouses');
     } catch (err: any) {
       console.warn('API creation error, falling back locally:', err);
-      // If server error or offline, fallback locally
+      toast.zod(err, 'Failed to create warehouse');
       const fallbackWh: Warehouse = {
         id: `wh-${Date.now()}`,
         name: payload.name,

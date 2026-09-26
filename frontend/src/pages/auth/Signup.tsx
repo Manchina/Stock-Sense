@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Boxes, Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { toast } from '../../context/ToastContext';
 
 export const Signup: React.FC = () => {
   const [name, setName] = useState('');
@@ -17,8 +18,10 @@ export const Signup: React.FC = () => {
     setErrorMsg(null);
     try {
       await signup({ name, email, password, role });
+      toast.success(`Account created for ${name}! Welcome to StockSense.`, 'Registration Successful');
       navigate('/dashboard');
-    } catch (err: unknown) {
+    } catch (err: any) {
+      toast.zod(err, 'Registration Failed');
       setErrorMsg(err instanceof Error ? err.message : 'Registration failed. Please check your inputs.');
     }
   };

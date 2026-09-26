@@ -22,6 +22,7 @@ import { OperationDocument, OperationItem, OperationStatus, Product } from '../.
 import { receiptsApi } from '../../../features/receipts/api';
 import { productsApi } from '../../../features/products/api';
 import { cn } from '../../../lib/utils';
+import { toast } from '../../../context/ToastContext';
 
 interface CreationStage {
   id: OperationStatus;
@@ -156,17 +157,20 @@ export const ReceiptCreate: React.FC = () => {
 
   const handleSubmit = async (overrideStatus?: OperationStatus) => {
     if (!partner.trim()) {
-      setErrorMsg('Please specify a supplier / vendor name.');
+      const msg = 'Please specify a supplier / vendor name.';
+      setErrorMsg(msg);
+      toast.error(msg, 'Supplier Required');
       return;
     }
 
     if (items.length === 0) {
-      setErrorMsg('Please add at least one product row.');
+      const msg = 'Please add at least one product row.';
+      setErrorMsg(msg);
+      toast.error(msg, 'Line Items Required');
       return;
     }
 
     const targetStatus = overrideStatus || initialStatus;
-    const isDone = targetStatus === 'done';
 
     setIsSubmitting(true);
     setErrorMsg(null);
@@ -178,7 +182,6 @@ export const ReceiptCreate: React.FC = () => {
       scheduledDate,
       expectedDate: scheduledDate,
       notes: notes.trim() || undefined,
-      validateImmediately: isDone,
       status: targetStatus,
       items: items.map((i) => ({
         productId: i.productId,
@@ -186,7 +189,7 @@ export const ReceiptCreate: React.FC = () => {
         sku: i.sku,
         quantity: i.quantity,
         qtyExpected: i.quantity,
-        qtyReceived: isDone ? i.quantity : 0,
+        qtyReceived: 0,
         unitOfMeasure: i.unitOfMeasure,
       })),
     };
@@ -194,35 +197,15 @@ export const ReceiptCreate: React.FC = () => {
     try {
       const res = await receiptsApi.createReceipt(payload);
       if (res && res.data) {
-        // Also update local mock fallback
         INITIAL_OPERATIONS.unshift(res.data);
+        toast.success(`Receipt ${res.data.documentNumber} created in status '${res.data.status}'.`, 'Receipt Created');
         navigate(`/operations/receipts/${res.data.id}`);
         return;
       }
     } catch (err: any) {
-      console.warn('API creation failed, using local offline fallback:', err);
-      // Fallback
-      const docNumber = `REC-${new Date().getFullYear()}-${String(
-        Math.floor(Math.random() * 9000) + 1000
-      )}`;
-
-      const fallbackReceipt: OperationDocument = {
-        id: `op-rec-${Date.now()}`,
-        documentNumber: docNumber,
-        type: 'receipt',
-        status: targetStatus,
-        partner: payload.partner,
-        destinationLocation: payload.destinationLocation,
-        items: items,
-        notes: payload.notes,
-        createdAt: new Date().toISOString(),
-        scheduledDate,
-        validatedAt: isDone ? new Date().toISOString() : undefined,
-        validatedBy: isDone ? 'Inventory Manager' : undefined,
-      };
-
-      INITIAL_OPERATIONS.unshift(fallbackReceipt);
-      navigate(`/operations/receipts/${fallbackReceipt.id}`);
+      console.warn('API creation error:', err);
+      toast.zod(err, 'Failed to create receipt');
+      setErrorMsg(err?.message || 'Failed to create receipt.');
     } finally {
       setIsSubmitting(false);
     }

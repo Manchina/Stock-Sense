@@ -7,6 +7,7 @@ import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
 import { adjustmentsApi } from '../../../features/adjustments/api';
+import { toast } from '../../../context/ToastContext';
 
 export const AdjustmentDetails: React.FC = () => {
   const { adjustmentId } = useParams<{ adjustmentId: string }>();
@@ -53,8 +54,13 @@ export const AdjustmentDetails: React.FC = () => {
         status: newStatus,
       });
       setOperation(updated);
+      toast.success(
+        `Adjustment ${operation.documentNumber} marked as ${newStatus.toUpperCase()}`,
+        newStatus === 'done' ? 'Stock Ledger Reconciled' : 'Adjustment Canceled'
+      );
     } catch (err: any) {
       console.error(`Failed to update adjustment to ${newStatus}:`, err);
+      toast.zod(err, `Failed to update adjustment to ${newStatus}`);
       setErrorMessage(err.message || `Failed to update adjustment to ${newStatus}`);
     } finally {
       setIsActionPending(false);

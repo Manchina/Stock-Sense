@@ -6,6 +6,7 @@ import { OperationStatusBar } from '../../../components/ui/OperationStatusBar';
 import { OperationDocument, OperationStatus } from '../../../types/common';
 import { deliveriesApi } from '../../../features/deliveries/api';
 import { formatDate } from '../../../lib/utils';
+import { toast } from '../../../context/ToastContext';
 
 export const DeliveryDetails: React.FC = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
@@ -48,17 +49,22 @@ export const DeliveryDetails: React.FC = () => {
         const res = await deliveriesApi.validate(deliveryId);
         if (res && res.data) {
           setOperation(res.data);
-          setSuccessMessage('Delivery successfully validated and dispatched. Inventory stock deducted!');
+          const msg = 'Delivery order validated! Stock deducted and recorded in move history ledger.';
+          setSuccessMessage(msg);
+          toast.success(msg, 'Stock Deducted (-Out)');
         }
       } else {
         const res = await deliveriesApi.update(deliveryId, { status: nextStatus });
         if (res && res.data) {
           setOperation(res.data);
-          setSuccessMessage(`Order updated to '${nextStatus}'.`);
+          const msg = `Delivery order status updated to '${nextStatus}'.`;
+          setSuccessMessage(msg);
+          toast.success(msg, 'Status Updated');
         }
       }
     } catch (err: any) {
       console.error('Failed to update status:', err);
+      toast.zod(err, 'Failed to update order status');
       setErrorMessage(err?.message || 'Failed to update order status.');
     } finally {
       setIsUpdating(false);
@@ -76,10 +82,13 @@ export const DeliveryDetails: React.FC = () => {
       const res = await deliveriesApi.cancel(deliveryId);
       if (res && res.data) {
         setOperation(res.data);
-        setSuccessMessage('Delivery order canceled.');
+        const msg = 'Delivery order marked as canceled.';
+        setSuccessMessage(msg);
+        toast.info(msg, 'Order Canceled');
       }
     } catch (err: any) {
       console.error('Failed to cancel delivery:', err);
+      toast.zod(err, 'Failed to cancel delivery order');
       setErrorMessage(err?.message || 'Failed to cancel delivery order.');
     } finally {
       setIsUpdating(false);

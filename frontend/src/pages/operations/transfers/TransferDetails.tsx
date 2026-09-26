@@ -7,6 +7,7 @@ import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
 import { transfersApi } from '../../../features/transfers/api';
+import { toast } from '../../../context/ToastContext';
 
 export const TransferDetails: React.FC = () => {
   const { transferId } = useParams<{ transferId: string }>();
@@ -53,8 +54,13 @@ export const TransferDetails: React.FC = () => {
         status: newStatus,
       });
       setOperation(updated);
+      toast.success(
+        `Transfer ${operation.documentNumber} updated to ${newStatus.toUpperCase()}`,
+        newStatus === 'done' ? 'Stock Transferred Successfully' : 'Status Updated'
+      );
     } catch (err: any) {
       console.error(`Failed to update transfer status to ${newStatus}:`, err);
+      toast.zod(err, `Failed to update transfer to ${newStatus}`);
       setErrorMessage(err.message || `Failed to update transfer to ${newStatus}`);
     } finally {
       setIsActionPending(false);

@@ -9,6 +9,7 @@ import { INITIAL_PRODUCTS, UNITS_OF_MEASURE } from '../../../lib/constants';
 import { OperationItem, Product } from '../../../types/common';
 import { transfersApi } from '../../../features/transfers/api';
 import { productsApi } from '../../../features/products/api';
+import { toast } from '../../../context/ToastContext';
 
 export const TransferCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -94,17 +95,23 @@ export const TransferCreate: React.FC = () => {
     setErrorMessage(null);
 
     if (!sourceLocation || !destinationLocation) {
-      setErrorMessage('Please select both source and destination locations.');
+      const msg = 'Please select both source and destination locations.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Locations Required');
       return;
     }
 
     if (sourceLocation === destinationLocation) {
-      setErrorMessage('Source and Destination locations cannot be identical.');
+      const msg = 'Source and Destination locations cannot be identical.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Invalid Locations');
       return;
     }
 
     if (items.length === 0) {
-      setErrorMessage('Please add at least one product to transfer.');
+      const msg = 'Please add at least one product to transfer.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Line Items Required');
       return;
     }
 
@@ -119,9 +126,11 @@ export const TransferCreate: React.FC = () => {
         items,
       });
 
+      toast.success(`Internal transfer ${created.documentNumber} created successfully.`, 'Transfer Created');
       navigate(`/operations/transfers/${created.id}`);
     } catch (err: any) {
       console.error('Failed to create transfer:', err);
+      toast.zod(err, 'Failed to create internal transfer');
       setErrorMessage(err.message || 'Failed to create internal transfer');
     } finally {
       setIsSubmitting(false);

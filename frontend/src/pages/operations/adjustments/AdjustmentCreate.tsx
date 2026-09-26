@@ -9,6 +9,8 @@ import { Product, OperationItem } from '../../../types/common';
 import { productsApi } from '../../../features/products/api';
 import { adjustmentsApi } from '../../../features/adjustments/api';
 
+import { toast } from '../../../context/ToastContext';
+
 export const AdjustmentCreate: React.FC = () => {
   const navigate = useNavigate();
   const [selectedProductId, setSelectedProductId] = useState(INITIAL_PRODUCTS[0].id);
@@ -46,12 +48,16 @@ export const AdjustmentCreate: React.FC = () => {
     setErrorMessage(null);
 
     if (!selectedProductId || !location) {
-      setErrorMessage('Please select both a product and target location.');
+      const msg = 'Please select both a product and target location.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Validation Error');
       return;
     }
 
     if (!reason.trim()) {
-      setErrorMessage('Please provide a reason or note for the adjustment.');
+      const msg = 'Please provide a reason or note for the adjustment.';
+      setErrorMessage(msg);
+      toast.error(msg, 'Validation Error');
       return;
     }
 
@@ -75,9 +81,14 @@ export const AdjustmentCreate: React.FC = () => {
         items,
       });
 
+      toast.success(
+        `Adjustment ${created.documentNumber} created (${difference >= 0 ? `+${difference}` : difference} units)`,
+        validateImmediately ? 'Stock Reconciled & Applied' : 'Draft Saved'
+      );
       navigate(`/operations/adjustments/${created.id}`);
     } catch (err: any) {
       console.error('Failed to create adjustment:', err);
+      toast.zod(err, 'Failed to submit stock adjustment');
       setErrorMessage(err.message || 'Failed to submit stock adjustment');
     } finally {
       setIsSubmitting(false);

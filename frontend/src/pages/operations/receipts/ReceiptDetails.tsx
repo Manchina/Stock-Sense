@@ -7,6 +7,7 @@ import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { formatDate } from '../../../lib/utils';
 import { OperationDocument, OperationStatus } from '../../../types/common';
 import { receiptsApi } from '../../../features/receipts/api';
+import { toast } from '../../../context/ToastContext';
 
 export const ReceiptDetails: React.FC = () => {
   const { receiptId } = useParams<{ receiptId: string }>();
@@ -58,13 +59,17 @@ export const ReceiptDetails: React.FC = () => {
         const res = await receiptsApi.validateReceipt(receiptId);
         if (res && res.data) {
           setOperation(res.data);
-          setActionMessage('Receipt validated and received! Stock credited directly to active inventory.');
+          const msg = 'Receipt validated! Stock credited and appended to move history ledger.';
+          setActionMessage(msg);
+          toast.success(msg, 'Stock Credited (+In)');
         }
       } else if (nextStatus === 'canceled') {
         const res = await receiptsApi.cancelReceipt(receiptId);
         if (res && res.data) {
           setOperation(res.data);
-          setActionMessage('Receipt order has been canceled.');
+          const msg = 'Receipt order has been marked as canceled.';
+          setActionMessage(msg);
+          toast.info(msg, 'Order Canceled');
         }
       } else {
         const res = await receiptsApi.updateReceipt(receiptId, { status: nextStatus });
@@ -77,17 +82,13 @@ export const ReceiptDetails: React.FC = () => {
               ? 'At Intake Bay (Arrived at warehouse dock)'
               : 'Order Placed (Draft)';
           setActionMessage(`Receipt status advanced to: ${label}`);
+          toast.success(`Receipt status updated to '${nextStatus}'.`, 'Status Updated');
         }
       }
-    } catch (err) {
-      console.warn('API status transition failed, applying local state update:', err);
-      setOperation({
-        ...operation,
-        status: nextStatus,
-        validatedAt: nextStatus === 'done' ? new Date().toISOString() : operation.validatedAt,
-        validatedBy: nextStatus === 'done' ? 'Inventory Manager' : operation.validatedBy,
-      });
-      setActionMessage(`Status updated to ${nextStatus}.`);
+    } catch (err: any) {
+      console.error('API status transition failed:', err);
+      toast.zod(err, 'Failed to update receipt status');
+      setActionMessage(err?.message || 'Failed to update receipt status.');
     } finally {
       setIsProcessing(false);
     }
