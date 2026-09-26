@@ -5,6 +5,8 @@ import { logger } from "hono/logger";
 import { testConnection } from "./config/db";
 import { env } from "./config/env";
 import { warehouseRouter } from "./routes/warehouse";
+import { productsRouter } from "./routes/products";
+import { categoriesRouter } from "./routes/categories";
 
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
@@ -44,6 +46,12 @@ app.get("/health", async (c) => {
 app.route("/api/v1/warehouses", warehouseRouter);
 app.route("/api/warehouses", warehouseRouter);
 
+app.route("/api/v1/products", productsRouter);
+app.route("/api/products", productsRouter);
+
+app.route("/api/v1/categories", categoriesRouter);
+app.route("/api/categories", categoriesRouter);
+
 app.get("/", (c) => {
   return c.json({
     name: "StockSense API",
@@ -52,6 +60,8 @@ app.get("/", (c) => {
     healthCheck: "/health",
     endpoints: {
       warehouses: "/api/v1/warehouses",
+      products: "/api/v1/products",
+      categories: "/api/v1/categories",
     },
   });
 });

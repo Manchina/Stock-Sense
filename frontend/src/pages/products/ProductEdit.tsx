@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { ProductForm } from '../../features/products/components/ProductForm';
 import { ProductFormData } from '../../features/products/types';
@@ -12,6 +13,7 @@ export const ProductEdit: React.FC = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (productId) {
@@ -25,9 +27,12 @@ export const ProductEdit: React.FC = () => {
   const handleSubmit = async (data: ProductFormData) => {
     if (!productId) return;
     setIsSaving(true);
+    setErrorMsg(null);
     try {
       await productsApi.update(productId, data);
       navigate(`/products/${productId}`);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to update product');
     } finally {
       setIsSaving(false);
     }
@@ -77,6 +82,13 @@ export const ProductEdit: React.FC = () => {
           )}
         </button>
       </PageHeader>
+
+      {errorMsg && (
+        <div className="alert alert-error text-xs font-semibold rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       <ProductForm
         initialData={product}
