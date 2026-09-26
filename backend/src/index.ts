@@ -6,6 +6,9 @@ import { testConnection } from "./config/db";
 import { env } from "./config/env";
 import { warehouseRouter } from "./routes/warehouse";
 
+import { errorHandler } from "./middleware/error.middleware";
+import { authRoutes } from "./modules/auth/auth.routes";
+
 const app = new Hono();
 
 // Global Middleware
@@ -17,6 +20,9 @@ app.use(
     credentials: true,
   })
 );
+
+// Register global error handler
+app.onError(errorHandler);
 
 // Basic health check endpoint
 app.get("/health", async (c) => {
@@ -50,14 +56,22 @@ app.get("/", (c) => {
   });
 });
 
-export const server = serve(
-  {
-    fetch: app.fetch,
-    port: env.PORT,
-  },
-  (info) => {
-    console.log(`🚀 StockSense API server listening on http://localhost:${info.port}`);
-  }
-);
+// Mount Auth routes under /auth and /api/v1/auth
+app.route("/auth", authRoutes);
+app.route("/api/v1/auth", authRoutes);
+app.route("/api/auth", authRoutes);
+
+export const server =
+  env.NODE_ENV === "test" || process.env.VITEST
+    ? null
+    : serve(
+        {
+          fetch: app.fetch,
+          port: env.PORT,
+        },
+        (info) => {
+          console.log(`🚀 StockSense API server listening on http://localhost:${info.port}`);
+        }
+      );
 
 export default app;

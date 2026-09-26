@@ -1,29 +1,47 @@
-import React, { useState } from 'react';
-import { User, Mail, Shield, Warehouse, Save, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Shield, Warehouse, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useAuthStore } from '../../store/authStore';
 import { INITIAL_WAREHOUSES } from '../../lib/constants';
 
 export const Profile: React.FC = () => {
-  const { user, setUser } = useAuthStore();
-  const [name, setName] = useState(user?.name || 'Sarah Connor');
-  const [email, setEmail] = useState(user?.email || 'sarah.connor@stocksense.io');
-  const [role, setRole] = useState(user?.role || 'inventory_manager');
+  const { user, updateProfile, isLoading } = useAuthStore();
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [role, setRole] = useState<'inventory_manager' | 'warehouse_staff'>(
+    (user?.role as 'inventory_manager' | 'warehouse_staff') || 'inventory_manager'
+  );
   const [warehouseId, setWarehouseId] = useState(user?.warehouseId || 'wh-1');
   const [saved, setSaved] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      setName(user.name);
+      setEmail(user.email);
+      if (user.role) {
+        setRole(user.role as 'inventory_manager' | 'warehouse_staff');
+      }
+      if (user.warehouseId) {
+        setWarehouseId(user.warehouseId);
+      }
+    }
+  }, [user]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    setUser({
-      ...user,
-      name,
-      email,
-      role: role as any,
-      warehouseId,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setErrorMsg(null);
+    try {
+      await updateProfile({
+        name: name.trim(),
+        email: email.trim(),
+        role,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to update profile.');
+    }
   };
 
   return (
@@ -36,9 +54,14 @@ export const Profile: React.FC = () => {
         >
           <button
             type="submit"
+            disabled={isLoading}
             className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs px-4 flex items-center gap-1.5"
           >
-            <Save className="w-3.5 h-3.5" />
+            {isLoading ? (
+              <span className="loading loading-spinner loading-xs"></span>
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
             Save Changes
           </button>
         </PageHeader>
@@ -47,6 +70,13 @@ export const Profile: React.FC = () => {
           <div className="alert alert-success shadow-xs rounded-xl text-xs font-bold flex items-center bg-emerald-50 text-emerald-800 border border-emerald-200 py-2">
             <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-600 shrink-0" />
             <span>Profile changes saved successfully!</span>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="alert alert-error shadow-xs rounded-xl text-xs font-bold flex items-center bg-rose-50 text-rose-800 border border-rose-200 py-2">
+            <AlertCircle className="w-4 h-4 mr-1.5 text-rose-600 shrink-0" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
