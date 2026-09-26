@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Truck } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
-import { api } from '../../../lib/api';
+import { deliveriesApi } from '../../../features/deliveries/api';
 
 export const Deliveries: React.FC = () => {
   const navigate = useNavigate();
@@ -19,32 +18,16 @@ export const Deliveries: React.FC = () => {
 
   const fetchDeliveries = useCallback(async () => {
     try {
-      const response = await api.get<{ success: boolean; data: OperationDocument[] }>('/operations/deliveries', {
-        params: {
-          search: search.trim() ? search.trim() : undefined,
-          status: statusFilter === 'all' ? undefined : statusFilter,
-        },
+      const response = await deliveriesApi.getAll({
+        search: search.trim() ? search.trim() : undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
       });
 
       if (response && response.data && Array.isArray(response.data)) {
         setDeliveries(response.data);
       }
     } catch (err) {
-      console.warn('API fetch deliveries failed, falling back to local dataset:', err);
-      const fallbackList = INITIAL_OPERATIONS.filter((o) => o.type === 'delivery');
-      const filtered = fallbackList.filter((d) => {
-        if (statusFilter !== 'all' && d.status !== statusFilter) return false;
-        if (search) {
-          const q = search.toLowerCase();
-          return (
-            d.documentNumber.toLowerCase().includes(q) ||
-            d.partner?.toLowerCase().includes(q) ||
-            d.items.some((i) => i.productName.toLowerCase().includes(q))
-          );
-        }
-        return true;
-      });
-      setDeliveries(filtered);
+      console.warn('API fetch deliveries failed:', err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -67,8 +50,11 @@ export const Deliveries: React.FC = () => {
       sortable: true,
       cell: (d) => (
         <div>
-          <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">{d.documentNumber}</div>
-          <div className="text-[11px] font-medium text-slate-500">{d.sourceLocation || 'Central Warehouse'}</div>
+          <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer flex items-center gap-1.5">
+            <Truck className="w-3.5 h-3.5 text-slate-400" />
+            {d.documentNumber}
+          </div>
+          <div className="text-[11px] font-medium text-slate-500">{d.sourceLocation || 'Main Warehouse'}</div>
         </div>
       ),
     },
@@ -76,17 +62,25 @@ export const Deliveries: React.FC = () => {
       header: 'Customer / Recipient',
       accessorKey: 'partner',
       sortable: true,
-      cell: (d) => <span className="font-semibold text-xs text-slate-800">{d.partner || '-'}</span>,
+      cell: (d) => (
+        <div>
+          <span className="font-semibold text-xs text-slate-800">{d.partner || d.customerName || '-'}</span>
+          {d.notes && <div className="text-[11px] text-slate-400 truncate max-w-xs">{d.notes}</div>}
+        </div>
+      ),
     },
     {
       header: 'Outbound Items',
       cell: (d) => (
         <div className="text-xs space-y-0.5">
-          {d.items.map((i, idx) => (
+          {(d.items || []).map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
-              <span className="font-bold text-blue-700">{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
+              <span className="font-bold text-rose-600">-{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
             </div>
           ))}
+          {(!d.items || d.items.length === 0) && (
+            <span className="text-slate-400 italic text-xs">No items listed</span>
+          )}
         </div>
       ),
     },
@@ -114,7 +108,7 @@ export const Deliveries: React.FC = () => {
       <option value="draft">Draft</option>
       <option value="waiting">Waiting (Picking)</option>
       <option value="ready">Ready (Packed)</option>
-      <option value="done">Done (Shipped)</option>
+      <option value="done">Done (Dispatched)</option>
       <option value="canceled">Canceled</option>
     </select>
   );
@@ -150,12 +144,12 @@ export const Deliveries: React.FC = () => {
         isLoading={isLoading}
         showSearch
         searchValue={search}
-        searchPlaceholder="Search delivery #, customer or item..."
+        searchPlaceholder="Search delivery #, customer, or product..."
         onSearchChange={setSearch}
         filters={filterDropdown}
         pageSize={10}
         emptyTitle="No delivery orders found"
-        emptyDescription="Create a delivery order when stock leaves the warehouse for customer dispatch."
+        emptyDescription="Create a delivery order when goods leave the warehouse for customer dispatch."
         onRowClick={(d) => navigate(`/operations/deliveries/${d.id}`)}
         paginationPosition="top"
       />

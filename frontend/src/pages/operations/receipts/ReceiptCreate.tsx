@@ -49,16 +49,9 @@ const CREATION_STAGES: CreationStage[] = [
   {
     id: 'ready',
     title: 'At Intake Bay',
-    subtitle: 'Arrived at dock for inspection',
+    subtitle: 'Arrived at dock for inspection & verification',
     icon: PackageCheck,
-    badge: 'Stage 3',
-  },
-  {
-    id: 'done',
-    title: 'Delivered & Stored',
-    subtitle: 'Immediate ledger credit & restock',
-    icon: Warehouse,
-    badge: 'Stage 4 (Direct Credit)',
+    badge: 'Stage 3 (Ready for Check-in)',
   },
 ];
 
@@ -240,13 +233,11 @@ export const ReceiptCreate: React.FC = () => {
   const getSubmitButtonLabel = () => {
     switch (initialStatus) {
       case 'draft':
-        return 'Create Receipt (Starts at Order Placed)';
+        return 'Create Receipt (Order Placed)';
       case 'waiting':
-        return 'Create Receipt (Starts at In Transit)';
+        return 'Create Receipt (In Transit)';
       case 'ready':
-        return 'Create Receipt (Starts at At Intake Bay)';
-      case 'done':
-        return `Create Receipt & Direct Restock (+${totalQty})`;
+        return 'Create Receipt (At Intake Bay)';
       default:
         return 'Create Receipt';
     }
@@ -256,7 +247,7 @@ export const ReceiptCreate: React.FC = () => {
     <div className="w-full space-y-5">
       <PageHeader
         title="Create Inbound Stock Receipt"
-        subtitle="Initialize incoming shipment from vendor. Step through Order Placed ➔ In Transit ➔ At Intake Bay ➔ Delivered & Stored."
+        subtitle="Initialize incoming shipment from vendor. Step through Order Placed ➔ In Transit ➔ At Intake Bay ➔ Validate & Restock."
         backUrl="/operations/receipts"
       >
         <button
@@ -273,14 +264,7 @@ export const ReceiptCreate: React.FC = () => {
           type="button"
           disabled={isSubmitting}
           onClick={() => handleSubmit()}
-          className={cn(
-            'btn btn-sm rounded-xl font-black text-white shadow-xs flex items-center gap-2 px-4 transition-all',
-            initialStatus === 'done'
-              ? 'btn-success bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
-              : initialStatus === 'ready'
-              ? 'btn-warning bg-amber-600 hover:bg-amber-700 border-amber-600 text-white'
-              : 'btn-primary bg-blue-600 hover:bg-blue-700 border-blue-600'
-          )}
+          className="btn btn-primary btn-sm rounded-xl font-black text-white shadow-xs flex items-center gap-2 px-4 transition-all bg-blue-600 hover:bg-blue-700 border-blue-600"
         >
           {isSubmitting ? (
             <span className="loading loading-spinner loading-xs" />
