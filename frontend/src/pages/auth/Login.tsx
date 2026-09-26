@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Boxes, Lock, Mail, ArrowRight, Shield } from 'lucide-react';
+import { Boxes, Lock, Mail, ArrowRight, Shield, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('sarah.connor@stocksense.io');
   const [password, setPassword] = useState('password123');
   const [role, setRole] = useState<'inventory_manager' | 'warehouse_staff'>('inventory_manager');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login(email, role);
-    navigate('/dashboard');
+    setErrorMsg(null);
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+    }
   };
 
   return (
@@ -32,12 +38,19 @@ export const Login: React.FC = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="bg-white py-8 px-6 shadow-sm rounded-3xl sm:px-10 border-2 border-slate-200">
+          {errorMsg && (
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="font-semibold">{errorMsg}</div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Role quick selector */}
             <div className="form-control">
               <label className="label py-1">
                 <span className="label-text font-bold text-xs text-slate-700">
-                  Select User Role Profile
+                  Quick Demo Profile
                 </span>
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -46,6 +59,8 @@ export const Login: React.FC = () => {
                   onClick={() => {
                     setRole('inventory_manager');
                     setEmail('sarah.connor@stocksense.io');
+                    setPassword('password123');
+                    setErrorMsg(null);
                   }}
                   className={`btn btn-sm ${
                     role === 'inventory_manager'
@@ -61,6 +76,8 @@ export const Login: React.FC = () => {
                   onClick={() => {
                     setRole('warehouse_staff');
                     setEmail('alex.miller@stocksense.io');
+                    setPassword('password123');
+                    setErrorMsg(null);
                   }}
                   className={`btn btn-sm ${
                     role === 'warehouse_staff'
