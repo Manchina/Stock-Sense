@@ -1,419 +1,497 @@
-# StockSense — System Architecture & File Structure
+# StockSense — Modern Modular Inventory Management System
 
-## 1. Overview
+> Real-time stock visibility, multi-warehouse logistics, and an immutable, double-entry audit ledger for modern supply chain operations.
 
-StockSense is a modular Inventory Management System (IMS) covering authentication, a
-real-time dashboard, product management, and the four core stock operations: Receipts,
-Delivery Orders, Internal Transfers, and Stock Adjustments — all backed by an immutable
-Stock Ledger.
-
-> 📋 **Engineering Implementation Plan**: See [plan.md](plan.md) for the complete phase-by-phase execution blueprint, TDD workflows, and verification checklist.
-
-**Stack**
-
-| Layer     | Technology                          |
-|-----------|--------------------------------------|
-| Frontend  | React (Vite), React Router, TanStack Query, Zustand/Context for local state |
-| Backend   | Hono (runs on Node.js / Bun / Cloudflare Workers) |
-| Database  | PostgreSQL on Neon (serverless Postgres, branching) |
-| ORM       | Drizzle ORM (or Prisma) with Neon's serverless HTTP/WebSocket driver |
-| Auth      | JWT (access + refresh) + OTP for password reset (email/SMS provider) |
-| Validation| Zod, shared between frontend and backend |
-| Deployment| Backend on a Node/Bun host or Cloudflare Workers; Frontend on Vercel/Netlify; DB on Neon |
+StockSense is a production-grade Inventory Management System (IMS) engineered to eliminate stock discrepancies, eradicate phantom inventory, and streamline warehouse movements. Instead of relying on error-prone spreadsheets, manual tallies, or unverified stock overwrites, StockSense couples an intuitive warehouse operations UI with a strict, transactionally guaranteed, append-only **Stock Ledger**.
 
 ---
 
-## 2. High-Level Architecture
+## Table of Contents
+
+1. [How the App Works](#1-how-the-app-works)
+   - [Core Concepts & Entities](#11-core-concepts--entities)
+   - [The Four Core Stock Operations](#12-the-four-core-stock-operations)
+   - [The Immutable Stock Ledger ("Move History")](#13-the-immutable-stock-ledger-move-history)
+   - [Reorder Rules & Low-Stock Automation](#14-reorder-rules--low-stock-automation)
+   - [Role-Based Access Control (RBAC)](#15-role-based-access-control-rbac)
+   - [End-to-End Operational Lifecycle Walkthrough](#16-end-to-end-operational-lifecycle-walkthrough)
+2. [Technology Stack](#2-technology-stack)
+3. [System Architecture](#3-system-architecture)
+   - [High-Level Architecture Diagram](#31-high-level-architecture-diagram)
+   - [Database Design & Entity-Relationship Diagram](#32-database-design--entity-relationship-diagram)
+   - [Backend Architecture & Transaction Safety](#33-backend-architecture--transaction-safety)
+   - [Frontend Architecture & State Strategy](#34-frontend-architecture--state-strategy)
+   - [REST API Specifications](#35-rest-api-specifications)
+   - [Repository & Monorepo Structure](#36-repository--monorepo-structure)
+4. [Getting Started & Local Development](#4-getting-started--local-development)
+5. [Testing & Quality Verification](#5-testing--quality-verification)
+6. [Engineering Roadmap](#6-engineering-roadmap)
+
+---
+
+## 1. How the App Works
+
+At its heart, StockSense models the real-world flow of physical inventory across warehouses, storage racks, and operational stages. It guarantees that **every physical stock change corresponds to a cryptographically traceable, append-only ledger transaction**.
 
 ```mermaid
 flowchart LR
-    subgraph Client["React SPA"]
-        UI[Pages / Components]
-        Store[Query Cache + State]
+    Vendors[External Vendors] -->|1. Receipts| Staging[Receiving Dock]
+    Staging -->|2. Internal Transfers| Storage[Warehouse Racks / Bins]
+    Storage -->|3. Adjustments| Storage
+    Storage -->|4. Deliveries| Customers[Dispatched to Customers]
+
+    subgraph Ledger Engine ["Atomic Ledger Engine (Double-Entry Record)"]
+        Staging -.->|"+Qty Entry"| Ledger[(Stock Ledger)]
+        Storage -.->|"±Qty Delta"| Ledger
+        Customers -.->|"-Qty Entry"| Ledger
     end
-
-    subgraph API["Hono API Server"]
-        MW[Middleware: auth, cors, logger, error handler]
-        Routes[Route Modules]
-        Services[Service Layer]
-        Repo[Repository / DB Access]
-    end
-
-    subgraph DB["Neon Postgres"]
-        Tables[(Tables + Views)]
-    end
-
-    UI --> Store --> API
-    MW --> Routes --> Services --> Repo --> Tables
-    API -- JSON --> Client
 ```
 
-**Request flow:** Client calls a REST endpoint → Hono middleware (auth/validation) → route
-handler → service layer (business rules, e.g. "validating a receipt increases stock") →
-repository layer (SQL via Drizzle) → Neon Postgres. Every stock-affecting action writes a
-row to `stock_ledger` inside the same DB transaction that updates `stock_levels`.
+### 1.1 Core Concepts & Entities
+
+- **Warehouses & Locations**: Stock is never stored in a generic global void. A physical facility (**Warehouse**) contains fine-grained storage bins or shelves (**Locations**, e.g., "Zone A, Rack 04"). All stock levels are bound to a specific `location_id`.
+- **Products & Categories**: Catalog items are defined with unique SKUs, primary Units of Measure (UOM, e.g., `kg`, `units`, `meters`), barcoding data, and hierarchical category groupings.
+- **Stock Levels**: The cached, instantaneous quantity of a product currently on hand at a specific location. Stock levels are strictly read-optimized projections kept in sync with the immutable ledger.
+- **Operation Status Lifecycle**: Every operational document transitions through explicit state boundaries:
+  
+  $$\text{Draft} \longrightarrow \text{Waiting} \longrightarrow \text{Ready} \longrightarrow \text{Done} \quad (\text{or } \text{Canceled})$$
 
 ---
 
-## 3. Database Design (Neon Postgres)
+### 1.2 The Four Core Stock Operations
 
-### 3.1 Entity-Relationship Diagram
-
-```mermaid
-erDiagram
-    USERS ||--o{ OTP_CODES : requests
-    USERS ||--o{ AUDIT_LOG : performs
-    WAREHOUSES ||--o{ LOCATIONS : contains
-    CATEGORIES ||--o{ PRODUCTS : classifies
-    PRODUCTS ||--o{ STOCK_LEVELS : has
-    LOCATIONS ||--o{ STOCK_LEVELS : holds
-    PRODUCTS ||--o{ REORDER_RULES : has
-
-    RECEIPTS ||--o{ RECEIPT_LINES : contains
-    DELIVERY_ORDERS ||--o{ DELIVERY_LINES : contains
-    TRANSFERS ||--o{ TRANSFER_LINES : contains
-    ADJUSTMENTS ||--o{ ADJUSTMENT_LINES : contains
-
-    PRODUCTS ||--o{ RECEIPT_LINES : referenced_in
-    PRODUCTS ||--o{ DELIVERY_LINES : referenced_in
-    PRODUCTS ||--o{ TRANSFER_LINES : referenced_in
-    PRODUCTS ||--o{ ADJUSTMENT_LINES : referenced_in
-
-    RECEIPTS ||--o{ STOCK_LEDGER : logs
-    DELIVERY_ORDERS ||--o{ STOCK_LEDGER : logs
-    TRANSFERS ||--o{ STOCK_LEDGER : logs
-    ADJUSTMENTS ||--o{ STOCK_LEDGER : logs
-```
-
-### 3.2 Core Tables
-
-- **users** — id, name, email, password_hash, role (`inventory_manager` \| `warehouse_staff`), created_at
-- **otp_codes** — id, user_id, code_hash, purpose (`password_reset`), expires_at, used_at
-- **warehouses** — id, name, address
-- **locations** — id, warehouse_id, name (e.g. "Rack A"), type
-- **categories** — id, name, parent_id (nullable, for sub-categories)
-- **products** — id, name, sku, category_id, uom, reorder_point, reorder_qty, is_active
-- **stock_levels** — id, product_id, location_id, quantity *(current on-hand, derived/kept in sync via ledger)*
-- **reorder_rules** — id, product_id, location_id, min_qty, max_qty
-- **receipts** / **receipt_lines** — header (supplier, status, warehouse, dates) + lines (product, qty_expected, qty_received)
-- **delivery_orders** / **delivery_lines** — header (customer/sales_order_ref, status, warehouse) + lines (product, qty_ordered, qty_picked, qty_delivered)
-- **transfers** / **transfer_lines** — header (source_location, dest_location, status) + lines (product, qty)
-- **adjustments** / **adjustment_lines** — header (location, reason, status) + lines (product, recorded_qty, counted_qty, delta)
-- **stock_ledger** — id, product_id, location_id, delta_qty, source_type (`receipt`\|`delivery`\|`transfer`\|`adjustment`), source_id, balance_after, created_at, created_by *(append-only, single source of truth for Move History)*
-- **audit_log** — id, user_id, action, entity, entity_id, created_at
-
-`status` fields (Draft, Waiting, Ready, Done, Canceled) are shared enums used for dashboard filters across Receipts, Delivery, Internal Transfers, and Adjustments.
-
----
-
-## 4. Backend Architecture (Hono)
-
-Layered structure: **routes → controllers → services → repositories → db**, keeping Hono
-handlers thin and business logic testable independently of the HTTP layer.
-
-- **Middleware**: JWT auth guard, role-based access (manager vs. staff), request validation (Zod), centralized error handler, request logger, CORS.
-- **Services** own transactional logic — e.g. `ReceiptService.validate()` opens a DB transaction, updates `stock_levels`, and inserts into `stock_ledger` atomically.
-- **Repositories** wrap Drizzle queries per table/aggregate, keeping SQL out of services.
-
----
-
-## 5. Backend File Structure
-
-```
-stocksense-api/
-├── src/
-│   ├── index.ts                     # Hono app bootstrap, route mounting
-│   ├── config/
-│   │   ├── env.ts                   # env var parsing/validation (zod)
-│   │   └── db.ts                    # Neon connection (drizzle client)
-│   ├── db/
-│   │   ├── schema/
-│   │   │   ├── users.schema.ts
-│   │   │   ├── warehouses.schema.ts
-│   │   │   ├── products.schema.ts
-│   │   │   ├── receipts.schema.ts
-│   │   │   ├── deliveries.schema.ts
-│   │   │   ├── transfers.schema.ts
-│   │   │   ├── adjustments.schema.ts
-│   │   │   └── ledger.schema.ts
-│   │   ├── migrations/              # drizzle-kit generated SQL migrations
-│   │   └── seed.ts
-│   ├── middleware/
-│   │   ├── auth.middleware.ts
-│   │   ├── role.middleware.ts
-│   │   ├── error.middleware.ts
-│   │   └── logger.middleware.ts
-│   ├── modules/
-│   │   ├── auth/
-│   │   │   ├── auth.routes.ts
-│   │   │   ├── auth.controller.ts
-│   │   │   ├── auth.service.ts       # login, signup, JWT issuing
-│   │   │   └── otp.service.ts        # generate/verify OTP for reset
-│   │   ├── dashboard/
-│   │   │   ├── dashboard.routes.ts
-│   │   │   ├── dashboard.controller.ts
-│   │   │   └── dashboard.service.ts  # KPI aggregation queries
-│   │   ├── products/
-│   │   │   ├── products.routes.ts
-│   │   │   ├── products.controller.ts
-│   │   │   ├── products.service.ts
-│   │   │   └── products.repository.ts
-│   │   ├── categories/
-│   │   ├── warehouses/
-│   │   ├── receipts/
-│   │   │   ├── receipts.routes.ts
-│   │   │   ├── receipts.controller.ts
-│   │   │   ├── receipts.service.ts   # validate() -> stock +qty, ledger entry
-│   │   │   └── receipts.repository.ts
-│   │   ├── deliveries/
-│   │   │   └── ...                   # pick/pack/validate -> stock -qty
-│   │   ├── transfers/
-│   │   │   └── ...                   # move between locations
-│   │   ├── adjustments/
-│   │   │   └── ...                   # recorded vs counted -> delta
-│   │   └── ledger/
-│   │       ├── ledger.routes.ts      # "Move History" endpoint
-│   │       └── ledger.service.ts
-│   ├── lib/
-│   │   ├── jwt.ts
-│   │   ├── password.ts               # hashing (argon2/bcrypt)
-│   │   └── otp-provider.ts           # email/SMS sender abstraction
-│   ├── shared/
-│   │   ├── validators/                # zod schemas shared per module
-│   │   └── constants.ts               # status enums, roles
-│   └── types/
-│       └── index.d.ts
-├── drizzle.config.ts
-├── .env.example
-├── package.json
-└── tsconfig.json
-```
-
----
-
-## 6. Frontend Architecture (React)
-
-Feature-folder structure with a shared API client and query layer; each module (Products,
-Receipts, Deliveries, Transfers, Adjustments) mirrors its backend counterpart.
-
-- **API layer**: typed fetch client + TanStack Query hooks per module (`useProducts`, `useReceipts`, …), giving caching, refetching, and optimistic updates for validate/pick/pack actions.
-- **Routing**: protected routes for Dashboard/Products/Operations, public routes for Login/Signup/Reset.
-- **Shared UI**: KPI cards, status badges (Draft/Waiting/Ready/Done/Canceled), filter bar (document type, status, warehouse, category), data table.
-
----
-
-## 7. Frontend File Structure
-
-```
-stocksense-web/
-├── src/
-│   ├── main.tsx
-│   ├── App.tsx                      # route definitions
-│   ├── api/
-│   │   ├── client.ts                 # axios/fetch instance, interceptors (JWT)
-│   │   ├── auth.api.ts
-│   │   ├── products.api.ts
-│   │   ├── receipts.api.ts
-│   │   ├── deliveries.api.ts
-│   │   ├── transfers.api.ts
-│   │   ├── adjustments.api.ts
-│   │   └── dashboard.api.ts
-│   ├── hooks/
-│   │   ├── useAuth.ts
-│   │   ├── useProducts.ts
-│   │   ├── useReceipts.ts
-│   │   ├── useDeliveries.ts
-│   │   ├── useTransfers.ts
-│   │   ├── useAdjustments.ts
-│   │   └── useDashboardKpis.ts
-│   ├── pages/
-│   │   ├── auth/
-│   │   │   ├── LoginPage.tsx
-│   │   │   ├── SignupPage.tsx
-│   │   │   └── ResetPasswordPage.tsx   # OTP flow
-│   │   ├── dashboard/
-│   │   │   └── DashboardPage.tsx
-│   │   ├── products/
-│   │   │   ├── ProductListPage.tsx
-│   │   │   └── ProductFormPage.tsx
-│   │   ├── operations/
-│   │   │   ├── ReceiptsPage.tsx
-│   │   │   ├── ReceiptDetailPage.tsx
-│   │   │   ├── DeliveryOrdersPage.tsx
-│   │   │   ├── DeliveryDetailPage.tsx
-│   │   │   ├── TransfersPage.tsx
-│   │   │   ├── AdjustmentsPage.tsx
-│   │   │   └── MoveHistoryPage.tsx
-│   │   ├── settings/
-│   │   │   └── WarehouseSettingsPage.tsx
-│   │   └── profile/
-│   │       └── MyProfilePage.tsx
-│   ├── components/
-│   │   ├── layout/
-│   │   │   ├── Sidebar.tsx           # Products, Operations, Settings, Profile
-│   │   │   ├── Topbar.tsx
-│   │   │   └── AppLayout.tsx
-│   │   ├── kpi/
-│   │   │   └── KpiCard.tsx
-│   │   ├── filters/
-│   │   │   └── FilterBar.tsx         # doc type / status / warehouse / category
-│   │   ├── table/
-│   │   │   └── DataTable.tsx
-│   │   └── ui/                       # buttons, badges, modals, inputs
-│   ├── store/
-│   │   └── auth.store.ts             # Zustand: current user, tokens
-│   ├── lib/
-│   │   ├── constants.ts              # status enums shared with backend
-│   │   └── validators/                # zod schemas (forms)
-│   ├── types/
-│   │   └── index.ts
-│   └── styles/
-│       └── globals.css
-├── vite.config.ts
-├── .env.example
-├── package.json
-└── tsconfig.json
-```
-
----
-
-## 8. Key API Endpoints (summary)
-
-| Module | Endpoints |
-|---|---|
-| Auth | `POST /auth/signup`, `POST /auth/login`, `POST /auth/otp/request`, `POST /auth/otp/verify`, `POST /auth/reset-password` |
-| Dashboard | `GET /dashboard/kpis`, `GET /dashboard/filters` |
-| Products | `GET/POST /products`, `GET/PATCH /products/:id`, `GET /products/:id/stock` |
-| Receipts | `GET/POST /receipts`, `GET /receipts/:id`, `POST /receipts/:id/validate` |
-| Deliveries | `GET/POST /deliveries`, `POST /deliveries/:id/pick`, `POST /deliveries/:id/pack`, `POST /deliveries/:id/validate` |
-| Transfers | `GET/POST /transfers`, `POST /transfers/:id/validate` |
-| Adjustments | `GET/POST /adjustments`, `POST /adjustments/:id/apply` |
-| Ledger | `GET /ledger` (Move History, filterable) |
-| Warehouses | `GET/POST /warehouses`, `GET/POST /locations` |
-
----
-
-## 9. Cross-Cutting Concerns
-
-- **Transactional integrity**: every "validate" action (receipt, delivery, transfer, adjustment) runs inside a single Postgres transaction that updates `stock_levels` and inserts a `stock_ledger` row — preventing partial stock updates.
-- **Low-stock alerts**: a scheduled job or DB trigger compares `stock_levels` against `reorder_rules` and flags items for the dashboard KPI and notifications.
-- **Multi-warehouse support**: all stock is keyed by `location_id` (not just `product_id`), so quantities are always scoped to a specific warehouse/location.
-- **Auth & roles**: JWT access + refresh tokens; role checks distinguish Inventory Managers (full CRUD) from Warehouse Staff (transfers, picking, counting).
-
----
-
-## 10. Operational Workflows & Concrete Inventory Scenarios
-
-StockSense models physical inventory operations with strict status transitions and transactional ledger updates:
+StockSense structures warehouse execution around four fundamental operational workflows:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Draft
-    Draft --> Waiting : Confirm Order / Schedule
-    Waiting --> Ready : Items Available / Arrived
-    Ready --> Done : Validate (Ledger Written & Stock Updated)
-    Draft --> Canceled : Cancel
+    [*] --> Draft : Create Document
+    Draft --> Waiting : Confirm Lines / Schedule
+    Waiting --> Ready : Availability Confirmed / Staged
+    Ready --> Done : Validate / Execute Transaction
+    Draft --> Canceled : Abandon
     Waiting --> Canceled : Cancel
 ```
 
-### 10.1 The Core Operational Lifecycles
+#### 1. Receipts (Inbound Logistics)
+- **Purpose**: Intake raw materials or finished goods from external vendors and suppliers.
+- **Workflow**: Create receipt header $\rightarrow$ Add expected lines (SKU, expected quantity) $\rightarrow$ Enter actual received quantity upon dock arrival $\rightarrow$ **Validate**.
+- **Inventory Impact**: Atomically increases `stock_levels` for the designated destination location and appends a positive delta ($\Delta > 0$) entry to the ledger.
 
-1. **Receipts (Incoming Goods from Suppliers)**
-   - **Process:** Create receipt $\rightarrow$ Specify supplier, target warehouse & items $\rightarrow$ Input received quantities $\rightarrow$ **Validate**.
-   - **Effect:** Increases `stock_levels` for the target location; appends an immutable entry to `stock_ledger`.
-   - *Example:* Receiving 50 units of "Steel Rods" at Main Store increments stock by +50.
+#### 2. Delivery Orders (Outbound Logistics)
+- **Purpose**: Fulfill and dispatch customer sales orders or outbound transfers.
+- **Workflow**: Create delivery order $\rightarrow$ **Pick items** (allocating and staging stock from bins) $\rightarrow$ **Pack items** (packaging verification) $\rightarrow$ **Validate / Ship**.
+- **Inventory Impact**: Atomically decreases `stock_levels` from the origin location and logs a negative delta ($\Delta < 0$) entry in the ledger.
 
-2. **Delivery Orders (Outgoing Goods to Customers)**
-   - **Process:** Create order $\rightarrow$ **Pick items** (reserves stock) $\rightarrow$ **Pack items** (prepares dispatch) $\rightarrow$ **Validate** (dispatches goods).
-   - **Effect:** Decreases `stock_levels` for the source location; appends an immutable ledger entry.
-   - *Example:* Sales order for 10 office chairs reduces inventory by -10 upon validation.
+#### 3. Internal Transfers (Internal Movements)
+- **Purpose**: Relocate stock between different locations, bins, production lines, or warehouse branches.
+- **Workflow**: Select source location and destination location $\rightarrow$ Select SKU and quantity to move $\rightarrow$ **Validate**.
+- **Inventory Impact**: Overall company inventory remains unchanged ($\sum \Delta = 0$). Source location balance is reduced by $N$, and destination location balance is increased by $N$ simultaneously.
 
-3. **Internal Transfers (Company Movements)**
-   - **Process:** Specify source location and destination location $\rightarrow$ Select product & transfer quantity $\rightarrow$ **Validate**.
-   - **Effect:** Total company-wide inventory remains unchanged; source location decreases by $N$, destination location increases by $N$; dual-line movement recorded in the ledger.
-   - *Example:* Main Warehouse $\rightarrow$ Production Floor, or Rack A $\rightarrow$ Rack B.
+#### 4. Stock Adjustments (Cycle Counting & Physical Reconciliation)
+- **Purpose**: Reconcile discrepancies between digital book balance and physical counts (due to breakage, shrinkage, scrap, or periodic audit).
+- **Workflow**: Select location and SKU $\rightarrow$ System displays recorded quantity $\rightarrow$ Staff enters physical counted quantity $\rightarrow$ System computes variance:
+  
+  $$\Delta = \text{Counted Quantity} - \text{Recorded Quantity}$$
+  
+- **Inventory Impact**: Reconciles the stock level to match the physical count and inserts the corrective delta ($\pm \Delta$) with mandatory reason codes.
 
-4. **Stock Adjustments (Physical Inventory Reconciliation)**
-   - **Process:** Select product and location $\rightarrow$ Enter counted physical quantity $\rightarrow$ System computes $\Delta = (\text{counted} - \text{recorded})$.
-   - **Effect:** Reconciles `stock_levels` to exact physical count; appends adjustment delta to the ledger with audit reason.
-   - *Example:* Recorded 100 kg, physical count reveals 3 kg damaged $\rightarrow$ delta $-3\text{ kg}$, new balance $97\text{ kg}$.
+---
 
-### 10.2 End-to-End Inventory Flow Walkthrough
+### 1.3 The Immutable Stock Ledger ("Move History")
+
+Traditional inventory software frequently updates quantity columns directly (`UPDATE products SET qty = 45`), obliterating the paper trail and making forensic audits impossible.
+
+StockSense enforces an **Append-Only Double-Entry Ledger Invariant**:
+
+$$\text{Balance}_{\text{after}} = \text{Balance}_{\text{before}} + \Delta_{\text{quantity}}$$
+
+- **No Updates, No Deletions**: The `stock_ledger` table allows only `INSERT` queries. Any modification requires a compensating entry.
+- **Audit Completeness**: Each entry captures the exact timestamp, acting user ID, source document type (`receipt`, `delivery`, `transfer`, `adjustment`), source document ID, target location, delta quantity, and post-transaction balance.
+- **Move History View**: The frontend exposes a filterable, real-time audit grid where managers can inspect every single SKU movement across the organization.
+
+---
+
+### 1.4 Reorder Rules & Low-Stock Automation
+
+To avoid stockouts without overstocking warehouse space, StockSense implements automated replenishment thresholds:
+
+- **Min / Max Rule Engine**: Each SKU-location pair can define a minimum safety threshold ($\text{Qty}_{\text{min}}$) and an optimal order quantity ($\text{Qty}_{\text{max}}$).
+- **Dashboard Alerts**: When `stock_levels.quantity` dips below `reorder_rules.min_qty`, the SKU is automatically flagged as `LOW_STOCK` on the manager dashboard KPI cards, generating proactive reorder recommendations.
+
+---
+
+### 1.5 Role-Based Access Control (RBAC)
+
+The system distinguishes between supervisory oversight and warehouse floor operations:
+
+| Feature / Action | Inventory Manager | Warehouse Staff |
+|---|:---:|:---:|
+| **Dashboard KPIs & Global Analytics** | Full Visibility | Operational View |
+| **Product & Category Catalog CRUD** | Full Access | Read-Only |
+| **Warehouse & Bin Configuration** | Full Access | Read-Only |
+| **Reorder Rules Configuration** | Full Access | Read-Only |
+| **Receipts: Create & Enter Counts** | Full Access | Full Access |
+| **Receipts: Validate (Commit to Stock)** | Full Access | Requires Manager Approval |
+| **Delivery Orders: Pick & Pack** | Full Access | Full Access |
+| **Delivery Orders: Validate & Ship** | Full Access | Full Access |
+| **Internal Transfers: Create & Validate** | Full Access | Full Access |
+| **Stock Adjustments: Physical Count Input** | Full Access | Input Draft Count |
+| **Stock Adjustments: Approve & Apply Delta** | Full Access | Read-Only |
+| **Move History Audit Trail** | Full View & CSV Export | View Movements |
+
+---
+
+### 1.6 End-to-End Operational Lifecycle Walkthrough
+
+Here is how a physical unit of inventory travels through the StockSense ecosystem:
 
 ```mermaid
 flowchart TD
-    Step1["Step 1: Receive Goods from Vendor\nReceive 100 kg Steel into Main Store\nStock: +100 kg (Balance: 100 kg)"]
-    Step2["Step 2: Internal Transfer\nMove 50 kg from Main Store to Production Rack\nMain Store: 50 kg | Production Rack: 50 kg (Total: 100 kg)"]
-    Step3["Step 3: Deliver Finished Goods\nShip 20 kg Steel to Customer\nProduction Rack: -20 kg (Balance: 30 kg | Total: 80 kg)"]
-    Step4["Step 4: Adjust Damaged Items\nPhysical count reveals 3 kg scrap\nProduction Rack: -3 kg (Balance: 27 kg | Total: 77 kg)"]
+    Step1["1. VENDOR RECEIPT\nSupplier ships 100 units of 'SKU-STEEL-01'\nStaff receives goods at Main Receiving Dock\nStatus: DONE | Stock Delta: +100 units\nLedger: Receipt #RC-101 (+100)"]
+    
+    Step2["2. INTERNAL TRANSFER\nForklift driver moves 60 units to Production Rack A\nStatus: DONE | Source Dock: -60 | Dest Rack: +60\nLedger: Transfer #TR-304 (-60 / +60)"]
+    
+    Step3["3. CUSTOMER DELIVERY\nClient purchases 25 units\nStaff picks 25 units from Rack A -> Packs order -> Dispatches\nStatus: DONE | Stock Delta: -25 units\nLedger: Delivery #DO-809 (-25)"]
+    
+    Step4["4. CYCLE COUNT ADJUSTMENT\nRoutine audit reveals 2 units damaged during handling\nStaff records count: 33 (Recorded: 35)\nManager approves delta: -2 units\nLedger: Adjustment #ADJ-012 (-2) | Current Balance: 33"]
 
     Step1 --> Step2 --> Step3 --> Step4
 ```
 
 ---
 
-## 11. Role-Based Access Control (RBAC) Matrix
+## 2. Technology Stack
 
-| Module / Action | Inventory Manager | Warehouse Staff |
-|---|:---:|:---:|
-| **Dashboard & Analytics** | Full View (All KPIs & Financials) | Operational View (Transfers & Orders) |
-| **Product & Category CRUD** | ✅ Create / Edit / Archive | ❌ Read Only |
-| **Reordering Rules & Min/Max** | ✅ Create / Edit | ❌ Read Only |
-| **Receipts (Create / Edit)** | ✅ Full Access | ✅ Create & Enter Received Qty |
-| **Receipts (Validate)** | ✅ Approve & Validate | ❌ Requires Manager Sign-off |
-| **Delivery Orders (Pick & Pack)** | ✅ Full Access | ✅ Pick & Pack Operations |
-| **Delivery Orders (Validate / Dispatch)** | ✅ Approve & Validate | ✅ Validate Shipment |
-| **Internal Transfers** | ✅ Create & Validate | ✅ Create & Move Stock |
-| **Stock Adjustments** | ✅ Approve & Reconcile | ❌ Input Count Only (Draft) |
-| **Move History (Audit Trail)** | ✅ Full Audit & Export | ✅ View Movements |
-| **Warehouse & Location Config** | ✅ Add / Edit Warehouses & Racks | ❌ Read Only |
+StockSense is architected around modern, type-safe, lightweight technologies designed for sub-millisecond API response times and instant UI updates:
 
----
-
-## 12. UI Wireframes & Mockups
-
-The user experience follows a clean, responsive layout designed for high-density warehouse operations and desktop inventory management:
-
-- **Mockup Design Link:** [StockSense Excalidraw Wireframes](https://link.excalidraw.com/l/65VNwvy7c4X/3ENvQFu9o8R)
-- **Navigation Architecture:**
-  - **Left Sidebar:** Products (List, Categories, Reorder Rules), Operations (Receipts, Deliveries, Adjustments, Transfers, Move History), Dashboard, Settings (Warehouses & Locations), User Profile & Logout.
-  - **Top Bar:** Quick Search (SKU / Name / Barcode), Active Warehouse Selector, Low-Stock Notification Bell, User Status.
-  - **Dynamic Filtering Panel:** Quick pill filters for Document Type, Status (`Draft`, `Waiting`, `Ready`, `Done`, `Canceled`), Warehouse, and Category.
+| Domain | Technology | Description |
+|---|---|---|
+| **Frontend Framework** | [React 19](https://react.dev/) + [Vite](https://vitejs.dev/) | Ultra-fast build pipeline and component rendering |
+| **Routing** | [React Router v7](https://reactrouter.com/) | Client-side routing with nested layouts and route protection |
+| **Server State & Caching** | [TanStack Query v5](https://tanstack.com/query/latest) | Asynchronous data synchronization, cache invalidation, and optimistic mutations |
+| **Client State Management** | [Zustand](https://zustand-demo.pmnd.rs/) | Minimalist client stores for auth session, active warehouse, and table filters |
+| **UI & Styling** | [Tailwind CSS](https://tailwindcss.com/) + [DaisyUI](https://daisyui.com/) | Responsive, dense warehouse design system with accessible components |
+| **Icons** | [Lucide React](https://lucide.dev/) | Clean, consistent operational iconography |
+| **Backend Server** | [Hono v4](https://hono.dev/) | Lightweight, standards-based web framework running on Node.js / Bun / Edge |
+| **Runtime Environment** | Node.js 20+ / [@hono/node-server](https://github.com/honojs/node-server) | Fast server execution with native TypeScript execution via `tsx` |
+| **Database** | [Neon PostgreSQL](https://neon.tech/) | Serverless Postgres with instant branching and pooled connection pooling |
+| **ORM & Migrations** | [Drizzle ORM](https://orm.drizzle.team/) + [Drizzle Kit](https://orm.drizzle.team/kit-docs/overview) | Zero-overhead, end-to-end type-safe SQL query builder and schema management |
+| **Schema Validation** | [Zod](https://zod.dev/) | Shared runtime boundary validation across API payloads and forms |
+| **Security & Auth** | JWT (`jsonwebtoken`) + [bcryptjs](https://github.com/dcodeIO/bcrypt.js) | Stateless access/refresh authentication, secure hashing, and OTP reset flows |
+| **Testing Engine** | [Vitest](https://vitest.dev/) | Vite-native unit and integration test runner |
 
 ---
 
-## 13. Getting Started & Local Development
+## 3. System Architecture
 
-### Prerequisites
-- Node.js 20+ or Bun 1.1+
-- PostgreSQL database (or free serverless tier on [Neon.tech](https://neon.tech))
-- Git
+### 3.1 High-Level Architecture Diagram
 
-### Quick Setup
+```mermaid
+flowchart LR
+    subgraph Client ["Frontend Client (React 19 SPA)"]
+        UI["UI Components\n(Pages, Tables, Modals)"]
+        ZStore["Zustand Store\n(Auth & UI State)"]
+        TQ["TanStack Query Cache\n(Server State)"]
+        UI <--> ZStore
+        UI <--> TQ
+    end
 
-```bash
-# 1. Clone repository
-git clone https://github.com/Manchina/Stock-Sense.git
-cd Stock-Sense
+    subgraph API ["Backend API (Hono Server)"]
+        MW["Middleware Pipeline\n(Auth Guard, CORS, Logger, Error Handler)"]
+        Router["Domain Routers\n(/products, /transfers, /adjustments, etc.)"]
+        ServiceLayer["Service Layer\n(Business Logic & Transaction Bounds)"]
+        Drizzle["Drizzle ORM\n(Typed Query Execution)"]
+        
+        MW --> Router --> ServiceLayer --> Drizzle
+    end
 
-# 2. Setup backend
-cd stocksense-api
-cp .env.example .env
-npm install
-npm run db:push     # Push Drizzle schema to Neon Postgres
-npm run db:seed     # Seed initial warehouses, demo users, and SKUs
-npm run dev         # Starts Hono API on http://localhost:3000
+    subgraph Database ["Persistence Layer (Neon Serverless Postgres)"]
+        Tables[(Core Relational Tables)]
+        LedgerTable[(stock_ledger\nAppend-Only Journal)]
+        Pooler[Connection Pooler / WebSocket]
+        
+        Drizzle <--> Pooler <--> Tables & LedgerTable
+    end
 
-# 3. Setup frontend (in a separate terminal)
-cd ../stocksense-web
-cp .env.example .env
-npm install
-npm run dev         # Starts Vite app on http://localhost:5173
+    TQ <-->|REST over HTTPS / JSON| MW
 ```
 
 ---
 
-## 14. Implementation Plan
+### 3.2 Database Design & Entity-Relationship Diagram
 
-For the detailed engineering roadmap, phased execution milestones, data contracts, and verification protocols, refer to [plan.md](plan.md).
+StockSense is backed by a normalized PostgreSQL schema designed for zero data redundancy, relational integrity, and high query concurrency:
 
+```mermaid
+erDiagram
+    USERS ||--o{ OTP_CODES : requests
+    USERS ||--o{ AUDIT_LOG : triggers
+    WAREHOUSES ||--o{ LOCATIONS : contains
+    CATEGORIES ||--o{ PRODUCTS : classifies
+    PRODUCTS ||--o{ STOCK_LEVELS : tracks
+    LOCATIONS ||--o{ STOCK_LEVELS : holds
+    PRODUCTS ||--o{ REORDER_RULES : configures
+    LOCATIONS ||--o{ REORDER_RULES : scopes
+
+    RECEIPTS ||--o{ RECEIPT_LINES : details
+    DELIVERY_ORDERS ||--o{ DELIVERY_LINES : details
+    TRANSFERS ||--o{ TRANSFER_LINES : details
+    ADJUSTMENTS ||--o{ ADJUSTMENT_LINES : details
+
+    PRODUCTS ||--o{ RECEIPT_LINES : references
+    PRODUCTS ||--o{ DELIVERY_LINES : references
+    PRODUCTS ||--o{ TRANSFER_LINES : references
+    PRODUCTS ||--o{ ADJUSTMENT_LINES : references
+
+    PRODUCTS ||--o{ STOCK_LEDGER : audits
+    LOCATIONS ||--o{ STOCK_LEDGER : records
+```
+
+#### Core Database Tables
+
+- **`users`**: User identities, role designations (`inventory_manager`, `warehouse_staff`), hashed credentials, and metadata.
+- **`otp_codes`**: Transient, cryptographic hash verification codes for secure password reset flows.
+- **`warehouses` & `locations`**: Two-tier physical spatial model (facility $\rightarrow$ shelf/rack/bin).
+- **`categories` & `products`**: Catalog records with SKU indexing, barcodes, descriptions, and UOM.
+- **`stock_levels`**: Cached on-hand quantities indexed by `(product_id, location_id)` with positive constraints.
+- **`reorder_rules`**: Minimum and maximum stock thresholds used to trigger low-stock alerts.
+- **`receipts` & `receipt_lines`**: Inbound purchasing documents and itemized quantities (expected vs. received).
+- **`deliveries` & `delivery_lines`**: Outbound customer fulfillment documents and picking/packing quantities.
+- **`transfers` & `transfer_lines`**: Multi-item internal movements between source and destination bins.
+- **`adjustments` & `adjustment_lines`**: Cycle counts comparing recorded vs. counted values, computing deltas.
+- **`stock_ledger`**: Append-only transaction journal storing product, location, delta quantity, resulting balance, and source event references.
+- **`audit_log`**: System-wide administrative tracking recording entity modifications and actor IDs.
+
+---
+
+### 3.3 Backend Architecture & Transaction Safety
+
+The backend adheres to a layered architecture: **Routes $\rightarrow$ Validation $\rightarrow$ Services $\rightarrow$ Drizzle ORM Data Access**.
+
+#### Transactional Stock Engine
+Stock adjustments and operational validations never run as standalone `UPDATE` statements. Every operation is wrapped in a PostgreSQL transaction (`db.transaction(...)`):
+
+```typescript
+// Conceptual transaction guarantee
+await db.transaction(async (tx) => {
+  // 1. Lock and update current stock level
+  const updatedLevel = await tx
+    .insert(stockLevels)
+    .values({ productId, locationId, quantity: deltaQty })
+    .onConflictDoUpdate({
+      target: [stockLevels.productId, stockLevels.locationId],
+      set: { quantity: sql`${stockLevels.quantity} + ${deltaQty}` }
+    })
+    .returning();
+
+  // 2. Append immutable record to stock_ledger
+  await tx.insert(stockLedger).values({
+    productId,
+    locationId,
+    deltaQty,
+    balanceAfter: updatedLevel.quantity,
+    sourceType: "receipt",
+    sourceId: receiptId,
+    createdBy: userId,
+  });
+});
+```
+
+If any step fails or an invalid balance is encountered, the entire transaction rolls back automatically, preventing orphaned stock updates or desynchronized ledger states.
+
+---
+
+### 3.4 Frontend Architecture & State Strategy
+
+The web frontend uses a modular, feature-oriented structure with clear separation between server state, application state, and presentation:
+
+- **Server-State Management**: TanStack Query manages all data fetching, caching, deduplication, and stale-while-revalidate cycles. Operational mutations (e.g. validating a transfer) immediately trigger cache invalidation for related products and stock levels.
+- **Client-Side State**: Zustand handles client-only ephemeral state:
+  - `authStore`: Access tokens, refresh tokens, user profile, and permission checks.
+  - Active warehouse selection for global filtering.
+  - Operational table filter parameters (search keywords, status pills, date ranges).
+- **Component Design System**: Reusable primitives built on Tailwind CSS and DaisyUI, featuring dense, accessible tables, status pills (`Draft`, `Waiting`, `Ready`, `Done`, `Canceled`), modal forms, and KPI summaries.
+
+---
+
+### 3.5 REST API Specifications
+
+The Hono backend exposes clean REST endpoints versioned under `/api/v1` (with convenience aliases under `/api`):
+
+| Module | Method | Endpoint | Description |
+|---|---|---|---|
+| **Health** | `GET` | `/health` | Live database connectivity and server uptime status |
+| **Auth** | `POST` | `/auth/signup` | Register a new user account |
+| | `POST` | `/auth/login` | Authenticate credentials and receive JWT access tokens |
+| | `POST` | `/auth/otp/request` | Request password reset OTP |
+| | `POST` | `/auth/otp/verify` | Verify OTP code authenticity |
+| | `POST` | `/auth/reset-password` | Set new password with verified OTP |
+| **Products** | `GET` | `/api/v1/products` | Retrieve list of products (filterable by category, SKU) |
+| | `POST` | `/api/v1/products` | Create a new product (Manager only) |
+| | `GET` | `/api/v1/products/:id` | Get detailed product specifications |
+| | `PUT/PATCH` | `/api/v1/products/:id` | Update product information |
+| | `DELETE` | `/api/v1/products/:id` | Soft-delete / deactivate product |
+| | `GET` | `/api/v1/products/:id/stock` | Get real-time stock levels across all locations |
+| | `GET/POST` | `/api/v1/products/:id/reorder-rules` | View or configure min/max reorder rules |
+| **Categories** | `GET/POST`| `/api/v1/categories` | Manage product taxonomy and hierarchy |
+| **Warehouses** | `GET/POST`| `/api/v1/warehouses` | Manage physical facilities and internal rack locations |
+| **Transfers** | `GET` | `/api/v1/transfers` | List internal transfers with status filters |
+| | `POST` | `/api/v1/transfers` | Create a new transfer order |
+| | `GET` | `/api/v1/transfers/:id` | View transfer details and line items |
+| | `PATCH` | `/api/v1/transfers/:id` | Update or validate transfer (triggers dual-line movement) |
+| **Adjustments**| `GET` | `/api/v1/adjustments` | List stock reconciliation audits |
+| | `POST` | `/api/v1/adjustments` | Create physical count audit |
+| | `PATCH` | `/api/v1/adjustments/:id` | Validate adjustment (reconciles stock & appends delta) |
+| **Ledger** | `GET` | `/api/v1/history` | Retrieve complete, filterable Move History audit trail |
+
+---
+
+### 3.6 Repository & Monorepo Structure
+
+StockSense is configured as an npm workspaces monorepo containing the decoupled backend and frontend codebases:
+
+```
+StockSense/
+├── backend/                         # Hono API, Drizzle ORM, & Database Service
+│   ├── src/
+│   │   ├── config/                  # Environment parsing (Zod) & Neon DB client
+│   │   ├── db/
+│   │   │   ├── schema/              # Drizzle table schemas, enums, & relations
+│   │   │   ├── migrations/          # Generated SQL migration files
+│   │   │   ├── migrate.ts           # Migration runner
+│   │   │   ├── seed.ts              # Initial demo data seeder
+│   │   │   └── check-connection.ts  # Database connection test utility
+│   │   ├── middleware/              # Auth guard, error handling, CORS, logger
+│   │   ├── modules/
+│   │   │   └── auth/                # Auth routes, JWT controllers, OTP service
+│   │   ├── routes/
+│   │   │   ├── adjustments/         # Stock adjustment endpoints & business helpers
+│   │   │   ├── categories/          # Category taxonomy management
+│   │   │   ├── history/             # Immutable ledger Move History queries
+│   │   │   ├── products/            # Product catalog, stock lookup, reorder rules
+│   │   │   ├── transfers/           # Internal transfer operations
+│   │   │   └── warehouse/           # Facility & rack location configuration
+│   │   ├── services/
+│   │   │   └── stock.service.ts     # Core transactional inventory manipulation
+│   │   └── shared/                  # Shared Zod validators and domain constants
+│   ├── drizzle.config.ts            # Drizzle Kit CLI configuration
+│   └── package.json
+│
+├── frontend/                        # React 19 Client SPA
+│   ├── src/
+│   │   ├── components/              # Shared UI components (layout, tables, inputs, modals)
+│   │   ├── features/
+│   │   │   ├── adjustments/         # Adjustments list, count entry modals
+│   │   │   ├── dashboard/           # KPI metric summaries, stock velocity charts
+│   │   │   ├── history/             # Move history data tables & audit filters
+│   │   │   ├── products/            # Product catalog cards, stock inspection drawers
+│   │   │   └── transfers/           # Transfer creation and dispatch workflows
+│   │   ├── hooks/                   # Custom data-fetching hooks (TanStack Query)
+│   │   ├── lib/                     # API client, utility functions, formatting
+│   │   ├── pages/                   # Top-level view routes (Auth, Dashboard, Operations)
+│   │   ├── router/                  # Protected routes and application navigation
+│   │   ├── store/                   # Zustand global stores (auth, filters)
+│   │   └── types/                   # TypeScript interfaces and API contract models
+│   ├── vite.config.ts               # Vite bundler configuration
+│   └── package.json
+│
+├── docs/                            # Architecture specs, diagrams, & planning guides
+├── plan.md                          # Master engineering implementation roadmap
+├── package.json                     # Root monorepo workspace configuration
+└── README.md                        # Project documentation
+```
+
+---
+
+## 4. Getting Started & Local Development
+
+### Prerequisites
+
+- **Node.js**: v20.0.0 or higher
+- **Package Manager**: `npm` v10+ (or `pnpm` / `bun`)
+- **Database**: A PostgreSQL database (a free serverless database on [Neon.tech](https://neon.tech) is recommended)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Manchina/Stock-Sense.git
+cd StockSense
+```
+
+### 2. Install Dependencies
+
+Install all dependencies across the monorepo root and all workspaces:
+
+```bash
+npm install
+```
+
+### 3. Configure Environment Variables
+
+Create the `.env` configuration file in `backend/`:
+
+```bash
+# In backend/.env
+DATABASE_URL=postgresql://user:password@ep-example.neon.tech/stocksense?sslmode=require
+PORT=3000
+NODE_ENV=development
+JWT_SECRET=super-secret-jwt-key-replace-in-production
+JWT_REFRESH_SECRET=super-secret-refresh-key-replace-in-production
+CORS_ORIGIN=http://localhost:5173,http://localhost:3000
+```
+
+And in `frontend/`:
+
+```bash
+# In frontend/.env
+VITE_API_URL=http://localhost:3000
+```
+
+### 4. Setup Database Schema & Seed Data
+
+Push the Drizzle schema directly to your Postgres database and populate sample warehouses, products, and users:
+
+```bash
+# Verify database connection
+npm run db:check
+
+# Push Drizzle schema to PostgreSQL
+npm run db:push
+
+# Seed demo users, categories, products, and locations
+npm run db:seed
+```
+
+### 5. Launch the Development Environment
+
+You can run both the API server and the frontend client concurrently from the monorepo root:
+
+```bash
+# Terminal 1: Run Hono API backend (listens on http://localhost:3000)
+npm run dev:backend
+
+# Terminal 2: Run Vite frontend (listens on http://localhost:5173)
+npm run dev:frontend
+```
+
+Now open [http://localhost:5173](http://localhost:5173) in your browser to access StockSense!
+
+---
+
+## 5. Testing & Quality Verification
+
+StockSense uses Vitest for rigorous testing of core transactional logic, API route integrity, and domain calculations:
+
+```bash
+# Run all workspace test suites
+npm run test
+
+# Run backend tests only
+npm run test --workspace=backend
+```
+
+---
+
+## 6. Engineering Roadmap
+
+For an in-depth breakdown of the phased engineering implementation, test-driven milestones, and upcoming features (including barcode scanning, multi-currency valuation, and automated supplier PO dispatch), refer to [plan.md](plan.md).
