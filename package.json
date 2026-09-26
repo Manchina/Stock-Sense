@@ -1,0 +1,19 @@
+{
+  "name": "stocksense",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StockSense — Modular Inventory Management System",
+  "workspaces": [
+    "stocksense-api",
+    "stocksense-web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=stocksense-api",
+    "build:api": "npm run build --workspace=stocksense-api",
+    "db:generate": "npm run db:generate --workspace=stocksense-api",
+    "db:migrate": "npm run db:migrate --workspace=stocksense-api",
+    "db:push": "npm run db:push --workspace=stocksense-api",
+    "db:studio": "npm run db:studio --workspace=stocksense-api",
+    "test": "npm run test --workspaces"
+  }
+}
