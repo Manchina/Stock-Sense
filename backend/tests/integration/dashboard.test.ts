@@ -98,4 +98,30 @@ describe("Dashboard Module Integration Tests", () => {
     },
     15000
   );
+
+  it(
+    "GET /api/v1/dashboard/notifications - should return actionable real-time alerts",
+    async () => {
+      const res = await app.request("/api/v1/dashboard/notifications", {
+        method: "GET",
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.success).toBe(true);
+      expect(Array.isArray(body.data)).toBe(true);
+      expect(typeof body.count).toBe("number");
+      expect(typeof body.unreadCount).toBe("number");
+
+      if (body.data.length > 0) {
+        const item = body.data[0];
+        expect(item.id).toBeDefined();
+        expect(item.title).toBeDefined();
+        expect(item.message).toBeDefined();
+        expect(["error", "warning", "info", "success"]).toContain(item.type);
+        expect(["low_stock", "delivery", "receipt", "transfer", "system"]).toContain(item.category);
+      }
+    },
+    15000
+  );
 });

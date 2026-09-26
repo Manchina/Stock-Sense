@@ -10,6 +10,7 @@ import {
   ArrowRight,
   RefreshCw,
   Loader2,
+  X,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { KpiCard } from '../../features/dashboard/components/KpiCard';
@@ -18,6 +19,7 @@ import { DataTable, Column } from '../../components/ui/DataTable';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { DashboardStats } from '../../features/dashboard/types';
 import { dashboardApi } from '../../features/dashboard/api';
+import { useNotificationStore } from '../../store/notificationStore';
 import { DOCUMENT_TYPE_CONFIG } from '../../lib/constants';
 import { OperationDocument } from '../../types/common';
 import { formatDate } from '../../lib/utils';
@@ -25,6 +27,14 @@ import { formatDate } from '../../lib/utils';
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [, startTransition] = useTransition();
+
+  const {
+    fetchNotifications,
+    getCriticalAlerts,
+    dismissNotification,
+  } = useNotificationStore();
+
+  const criticalAlerts = getCriticalAlerts();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [operations, setOperations] = useState<OperationDocument[]>([]);
@@ -65,12 +75,13 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     loadStats();
     loadOperations();
-  }, [loadStats, loadOperations]);
+    fetchNotifications();
+  }, [loadStats, loadOperations, fetchNotifications]);
 
   // Full Refresh handler
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([loadStats(), loadOperations()]);
+    await Promise.all([loadStats(), loadOperations(), fetchNotifications()]);
     setLastRefreshedAt(new Date());
     setIsRefreshing(false);
   };
@@ -213,6 +224,58 @@ export const Dashboard: React.FC = () => {
         </div>
         <span>Last synced: {lastRefreshedAt.toLocaleTimeString()}</span>
       </div>
+
+      {/* Critical Out-of-Stock Alert Banner */}
+      {criticalAlerts.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-xs animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-100 text-rose-600 shrink-0 mt-0.5 sm:mt-0">
+                <AlertTriangle className="w-5 h-5 text-rose-600 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-rose-900">
+                    Critical Stock Attention Required ({criticalAlerts.length} item{criticalAlerts.length > 1 ? 's' : ''})
+                  </h4>
+                  <span className="badge badge-error badge-xs text-white uppercase text-[10px] font-bold">
+                    Depleted
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700 mt-0.5 leading-relaxed">
+                  {criticalAlerts[0].message}
+                  {criticalAlerts.length > 1 && (
+                    <span className="font-semibold ml-1">
+                      (+{criticalAlerts.length - 1} other critical item{criticalAlerts.length - 1 > 1 ? 's' : ''})
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              {criticalAlerts[0].link && (
+                <button
+                  type="button"
+                  onClick={() => navigate(criticalAlerts[0].link!)}
+                  className="btn btn-xs sm:btn-sm bg-rose-600 hover:bg-rose-700 text-white border-none rounded-xl font-bold shadow-xs gap-1"
+                >
+                  <span>{criticalAlerts[0].actionLabel || 'View Product'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => dismissNotification(criticalAlerts[0].id)}
+                className="btn btn-ghost btn-xs text-rose-600 hover:bg-rose-100 rounded-lg p-1.5"
+                title="Dismiss alert"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 5 Real-Time KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
