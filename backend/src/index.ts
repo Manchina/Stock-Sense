@@ -8,6 +8,7 @@ import { warehouseRouter } from "./routes/warehouse";
 import { productsRouter } from "./routes/products";
 import { categoriesRouter } from "./routes/categories";
 import { transfersRouter } from "./routes/transfers";
+import { adjustmentsRouter } from "./routes/adjustments";
 import { historyRouter } from "./routes/history";
 
 import { errorHandler } from "./middleware/error.middleware";
@@ -57,6 +58,9 @@ app.route("/api/categories", categoriesRouter);
 app.route("/api/v1/transfers", transfersRouter);
 app.route("/api/transfers", transfersRouter);
 
+app.route("/api/v1/adjustments", adjustmentsRouter);
+app.route("/api/adjustments", adjustmentsRouter);
+
 app.route("/api/v1/history", historyRouter);
 app.route("/api/history", historyRouter);
 
@@ -71,6 +75,7 @@ app.get("/", (c) => {
       products: "/api/v1/products",
       categories: "/api/v1/categories",
       transfers: "/api/v1/transfers",
+      adjustments: "/api/v1/adjustments",
       history: "/api/v1/history",
     },
   });
