@@ -37,10 +37,16 @@ export interface Product {
 }
 
 export interface OperationItem {
+  id?: string;
   productId: string;
   productName: string;
   sku: string;
   quantity: number;
+  qtyExpected?: number;
+  qtyReceived?: number;
+  qtyOrdered?: number;
+  qtyPicked?: number;
+  qtyDelivered?: number;
   unitOfMeasure: string;
 }
 

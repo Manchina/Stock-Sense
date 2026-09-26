@@ -79,15 +79,22 @@ export const Receipts: React.FC = () => {
       cell: (r) => <span className="font-semibold text-xs text-slate-800">{r.partner || '-'}</span>,
     },
     {
-      header: 'Received Goods',
+      header: 'Inbound Items',
       cell: (r) => (
         <div className="text-xs space-y-0.5">
           {r.items && r.items.length > 0 ? (
             r.items.map((i, idx) => (
               <div key={idx} className="font-semibold text-slate-900">
-                <span className="font-bold text-emerald-700">
-                  +{i.quantity} {i.unitOfMeasure}
-                </span>{' '}
+                {r.status === 'done' ? (
+                  <span className="font-bold text-emerald-700">
+                    +{i.qtyReceived !== undefined && i.qtyReceived > 0 ? i.qtyReceived : i.quantity} {i.unitOfMeasure}
+                  </span>
+                ) : (
+                  <span className="font-bold text-blue-700">
+                    {i.qtyExpected || i.quantity} {i.unitOfMeasure}{' '}
+                    <span className="text-[10px] font-medium text-slate-400">(Expected)</span>
+                  </span>
+                )}{' '}
                 × {i.productName}
               </div>
             ))

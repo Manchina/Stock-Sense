@@ -469,21 +469,13 @@ export const ReceiptCreate: React.FC = () => {
                   />
                 </div>
 
-                <div className="w-full sm:w-36">
+                <div className="w-full sm:w-32">
                   <label className="label py-0.5 mb-0.5">
-                    <span className="label-text font-bold text-xs text-slate-700">Unit</span>
+                    <span className="label-text font-bold text-xs text-slate-700">Unit of Measure</span>
                   </label>
-                  <select
-                    value={item.unitOfMeasure || 'Units (pcs)'}
-                    onChange={(e) => handleUnitChange(idx, e.target.value)}
-                    className="select select-bordered select-sm w-full bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-xl"
-                  >
-                    {UNITS_OF_MEASURE.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="h-8 min-h-8 px-3 flex items-center bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
+                    {item.unitOfMeasure || 'Units (pcs)'}
+                  </div>
                 </div>
 
                 {items.length > 1 && (

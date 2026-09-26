@@ -179,13 +179,14 @@ export function formatReceiptResponse(receipt: any) {
       : "Main Warehouse / Receiving Bay";
 
   const formattedItems = (receipt.lines || []).map((line: any) => ({
+    id: line.id,
     productId: line.productId,
     productName: line.product?.name || "Inventory Product",
     sku: line.product?.sku || "SKU-UNKNOWN",
-    quantity: line.qtyReceived > 0 ? line.qtyReceived : line.qtyExpected,
+    quantity: line.qtyExpected,
     qtyExpected: line.qtyExpected,
-    qtyReceived: line.qtyReceived,
-    unitOfMeasure: line.product?.uom || "Units (pcs)",
+    qtyReceived: line.qtyReceived ?? 0,
+    unitOfMeasure: line.product?.unitOfMeasure || line.product?.uom || "Units (pcs)",
   }));
 
   return {

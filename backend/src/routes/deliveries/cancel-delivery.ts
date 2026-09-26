@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../../config/db";
 import { deliveryOrders } from "../../db/schema/deliveries.schema";
 import { formatDeliveryResponse } from "./delivery.helper";
@@ -16,41 +16,42 @@ export async function cancelDeliveryHandler(c: Context) {
       return c.json({ success: false, message: "Delivery ID is required" }, 400);
     }
 
-    const existing = await db.query.deliveryOrders.findFirst({
-      where: eq(deliveryOrders.id, id),
-    });
-
-    if (!existing) {
-      return c.json({ success: false, message: `Delivery order with ID '${id}' not found` }, 404);
-    }
-
-    if (existing.status === "done") {
-      return c.json(
-        {
-          success: false,
-          message: "Cannot cancel a delivery that has already been validated and dispatched.",
-        },
-        400
-      );
-    }
-
-    if (existing.status === "canceled") {
-      return c.json(
-        {
-          success: false,
-          message: "Delivery order is already canceled.",
-        },
-        400
-      );
-    }
-
-    await db
+    const [canceledDelivery] = await db
       .update(deliveryOrders)
       .set({
         status: "canceled",
         updatedAt: new Date(),
       })
-      .where(eq(deliveryOrders.id, id));
+      .where(
+        and(
+          eq(deliveryOrders.id, id),
+          ne(deliveryOrders.status, "done"),
+          ne(deliveryOrders.status, "canceled")
+        )
+      )
+      .returning();
+
+    if (!canceledDelivery) {
+      const existing = await db.query.deliveryOrders.findFirst({
+        where: eq(deliveryOrders.id, id),
+      });
+
+      if (!existing) {
+        return c.json({ success: false, message: `Delivery order with ID '${id}' not found` }, 404);
+      }
+
+      if (existing.status === "done") {
+        return c.json(
+          {
+            success: false,
+            message: "Cannot cancel a delivery that has already been validated and dispatched.",
+          },
+          400
+        );
+      }
+
+      return c.json({ success: false, message: "Delivery order is already canceled." }, 400);
+    }
 
     const updated = await db.query.deliveryOrders.findFirst({
       where: eq(deliveryOrders.id, id),

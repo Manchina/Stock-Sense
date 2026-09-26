@@ -1,7 +1,8 @@
 import { Context } from "hono";
-import { eq, desc, and, or, ilike } from "drizzle-orm";
+import { eq, desc, and, or, ilike, inArray } from "drizzle-orm";
 import { db } from "../../config/db";
-import { receipts } from "../../db/schema/receipts.schema";
+import { receipts, receiptLines } from "../../db/schema/receipts.schema";
+import { products } from "../../db/schema/products.schema";
 import { formatReceiptResponse } from "./receipt.helper";
 
 /**
@@ -29,13 +30,33 @@ export async function getReceiptsHandler(c: Context) {
 
     if (search) {
       const searchPattern = `%${search}%`;
-      conditions.push(
-        or(
-          ilike(receipts.receiptNumber, searchPattern),
-          ilike(receipts.supplierName, searchPattern),
-          ilike(receipts.notes, searchPattern)
-        )
-      );
+      const searchOrConditions = [
+        ilike(receipts.receiptNumber, searchPattern),
+        ilike(receipts.supplierName, searchPattern),
+        ilike(receipts.notes, searchPattern),
+      ];
+
+      const matchingProducts = await db.query.products.findMany({
+        where: or(ilike(products.name, searchPattern), ilike(products.sku, searchPattern)),
+        columns: { id: true },
+      });
+
+      if (matchingProducts.length > 0) {
+        const matchingLines = await db.query.receiptLines.findMany({
+          where: inArray(
+            receiptLines.productId,
+            matchingProducts.map((p) => p.id)
+          ),
+          columns: { receiptId: true },
+        });
+
+        const receiptIds = matchingLines.map((l) => l.receiptId);
+        if (receiptIds.length > 0) {
+          searchOrConditions.push(inArray(receipts.id, receiptIds));
+        }
+      }
+
+      conditions.push(or(...searchOrConditions));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

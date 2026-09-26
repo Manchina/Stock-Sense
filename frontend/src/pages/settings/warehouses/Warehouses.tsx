@@ -65,6 +65,10 @@ export const Warehouses: React.FC = () => {
     });
   }, [warehouses, search]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const totalItems = filteredWarehouses.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const paginatedWarehouses = useMemo(() => {

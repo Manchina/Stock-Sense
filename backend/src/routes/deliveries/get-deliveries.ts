@@ -1,7 +1,8 @@
 import { Context } from "hono";
-import { eq, desc, and, or, ilike } from "drizzle-orm";
+import { eq, desc, and, or, ilike, inArray } from "drizzle-orm";
 import { db } from "../../config/db";
-import { deliveryOrders } from "../../db/schema/deliveries.schema";
+import { deliveryOrders, deliveryLines } from "../../db/schema/deliveries.schema";
+import { products } from "../../db/schema/products.schema";
 import { formatDeliveryResponse } from "./delivery.helper";
 
 /**
@@ -29,14 +30,34 @@ export async function getDeliveriesHandler(c: Context) {
 
     if (search) {
       const searchPattern = `%${search}%`;
-      conditions.push(
-        or(
-          ilike(deliveryOrders.orderNumber, searchPattern),
-          ilike(deliveryOrders.customerName, searchPattern),
-          ilike(deliveryOrders.customerRef, searchPattern),
-          ilike(deliveryOrders.notes, searchPattern)
-        )
-      );
+      const searchOrConditions = [
+        ilike(deliveryOrders.orderNumber, searchPattern),
+        ilike(deliveryOrders.customerName, searchPattern),
+        ilike(deliveryOrders.customerRef, searchPattern),
+        ilike(deliveryOrders.notes, searchPattern),
+      ];
+
+      const matchingProducts = await db.query.products.findMany({
+        where: or(ilike(products.name, searchPattern), ilike(products.sku, searchPattern)),
+        columns: { id: true },
+      });
+
+      if (matchingProducts.length > 0) {
+        const matchingLines = await db.query.deliveryLines.findMany({
+          where: inArray(
+            deliveryLines.productId,
+            matchingProducts.map((p) => p.id)
+          ),
+          columns: { deliveryId: true },
+        });
+
+        const deliveryIds = matchingLines.map((l) => l.deliveryId);
+        if (deliveryIds.length > 0) {
+          searchOrConditions.push(inArray(deliveryOrders.id, deliveryIds));
+        }
+      }
+
+      conditions.push(or(...searchOrConditions));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

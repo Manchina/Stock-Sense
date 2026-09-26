@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../../config/db";
 import { deliveryOrders, deliveryLines } from "../../db/schema/deliveries.schema";
 import { locations } from "../../db/schema/warehouses.schema";
@@ -77,8 +77,8 @@ export async function validateDeliveryHandler(c: Context) {
 
     // Atomic validation & ledger write
     await db.transaction(async (tx) => {
-      // 1. Update delivery header
-      await tx
+      // 1. Conditional update to prevent concurrent double-deduction
+      const [lockedDelivery] = await tx
         .update(deliveryOrders)
         .set({
           status: "done",
@@ -87,7 +87,20 @@ export async function validateDeliveryHandler(c: Context) {
           validatedBy: userId,
           updatedAt: new Date(),
         })
-        .where(eq(deliveryOrders.id, id));
+        .where(
+          and(
+            eq(deliveryOrders.id, id),
+            ne(deliveryOrders.status, "done"),
+            ne(deliveryOrders.status, "canceled")
+          )
+        )
+        .returning();
+
+      if (!lockedDelivery) {
+        throw new Error(
+          `Delivery order '${existingDelivery.orderNumber}' has already been processed or canceled by another request.`
+        );
+      }
 
       // 2. Iterate each line item, mark qtyDelivered = qtyOrdered, and execute stock movement (-Out)
       for (const line of existingDelivery.lines) {

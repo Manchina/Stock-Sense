@@ -35,7 +35,7 @@ export const ReceiptDetails: React.FC = () => {
       }
 
       // Fallback
-      const fallback = INITIAL_OPERATIONS.find((o) => o.id === receiptId) || INITIAL_OPERATIONS[0];
+      const fallback = INITIAL_OPERATIONS.find((o) => o.id === receiptId || o.documentNumber === receiptId);
       if (fallback && isMounted) {
         setOperation(fallback);
       }
