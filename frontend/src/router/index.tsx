@@ -43,6 +43,8 @@ import { WarehouseEdit } from '../pages/settings/warehouses/WarehouseEdit';
 // Profile
 import { Profile } from '../pages/profile/Profile';
 
+import { ProtectedRoute } from '../components/auth/ProtectedRoute';
+
 export const router = createBrowserRouter([
   // Public Auth Routes
   {
@@ -65,7 +67,11 @@ export const router = createBrowserRouter([
   // Authenticated App Shell Routes
   {
     path: '/',
-    element: <AppLayout />,
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
