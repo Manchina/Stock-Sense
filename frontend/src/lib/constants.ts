@@ -18,7 +18,9 @@ export const DOCUMENT_TYPE_CONFIG: Record<
   receipt: { label: 'Receipt (Incoming)', prefix: 'REC', color: 'text-emerald-600' },
   delivery: { label: 'Delivery Order (Outgoing)', prefix: 'DEL', color: 'text-blue-600' },
   internal: { label: 'Internal Transfer', prefix: 'INT', color: 'text-teal-600' },
+  transfer: { label: 'Internal Transfer', prefix: 'INT', color: 'text-teal-600' },
   adjustment: { label: 'Inventory Adjustment', prefix: 'ADJ', color: 'text-amber-600' },
+  initial_inventory: { label: 'Initial Inventory', prefix: 'INIT', color: 'text-purple-600' },
 };
 
 export const PRODUCT_CATEGORIES = [
