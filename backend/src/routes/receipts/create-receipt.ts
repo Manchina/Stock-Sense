@@ -9,13 +9,11 @@ import {
   resolveDefaultUserId,
   formatReceiptResponse,
 } from "./receipt.helper";
-import { executeStockMovement } from "../../services/stock.service";
 import { eq } from "drizzle-orm";
 
 /**
  * POST /api/v1/receipts
  * Create a new incoming stock receipt document.
- * If validateImmediately is true (or status is 'done'), automatically records stock ledger movements.
  */
 export async function createReceiptHandler(c: Context) {
   try {
@@ -41,7 +39,6 @@ export async function createReceiptHandler(c: Context) {
       destinationWarehouse,
       destinationLocation,
       status: requestedStatus,
-      validateImmediately,
       expectedDate,
       scheduledDate,
       notes,

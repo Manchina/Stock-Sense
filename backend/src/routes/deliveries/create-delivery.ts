@@ -9,13 +9,11 @@ import {
   resolveDefaultUserId,
   formatDeliveryResponse,
 } from "./delivery.helper";
-import { executeStockMovement } from "../../services/stock.service";
 import { eq } from "drizzle-orm";
 
 /**
  * POST /api/v1/deliveries
  * Create a new outbound delivery order document.
- * If validateImmediately is true (or status is 'done'), automatically records stock ledger deductions.
  */
 export async function createDeliveryHandler(c: Context) {
   try {
@@ -42,7 +40,6 @@ export async function createDeliveryHandler(c: Context) {
       sourceWarehouse,
       sourceLocation,
       status: requestedStatus,
-      validateImmediately,
       notes,
       items,
     } = parsed.data;
