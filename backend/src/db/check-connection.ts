@@ -1,4 +1,4 @@
-import { testConnection } from "../config/db";
+import { pool, testConnection } from "../config/db";
 import { env } from "../config/env";
 
 async function main() {
@@ -10,6 +10,15 @@ async function main() {
   if (result.ok) {
     console.log("✅ Database connection successful!");
     console.log(`🕒 Server database time: ${result.timestamp}`);
+
+    const res = await pool.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"
+    );
+    const tables = res.rows.map((row) => row.table_name);
+    console.log(`📦 Schema initialized with ${tables.length} tables:`);
+    console.log(tables.map((t) => `   - ${t}`).join("\n"));
+
+    await pool.end();
     process.exit(0);
   } else {
     console.error("❌ Database connection failed:");
@@ -18,6 +27,7 @@ async function main() {
     console.log("1. Ensure your DATABASE_URL in 'backend/.env' is correct.");
     console.log("2. For Neon Postgres, verify your project is not paused and uses the pooled connection string.");
     console.log("3. For local PostgreSQL, verify PostgreSQL service is running on your system.");
+    await pool.end();
     process.exit(1);
   }
 }
