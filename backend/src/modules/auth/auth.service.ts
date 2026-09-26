@@ -6,7 +6,7 @@ import { otpCodes, users, type User } from "../../db/schema";
 import { signAccessToken, signRefreshToken, signResetToken, verifyRefreshToken, verifyResetToken } from "../../lib/jwt";
 import { generateOtp, getOtpExpiresAt, hashOtp } from "../../lib/otp-provider";
 import { comparePassword, hashPassword } from "../../lib/password";
-import type { LoginInput, SignupInput } from "../../shared/validators/auth.validator";
+import type { LoginInput, SignupInput, UpdateProfileInput } from "../../shared/validators/auth.validator";
 
 export interface SafeUser {
   id: string;
@@ -305,6 +305,49 @@ export class AuthService {
 
     return sanitizeUser(user);
   }
+
+  /**
+   * Update authenticated user profile details.
+   */
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<SafeUser> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user || !user.isActive) {
+      throw new HTTPException(404, { message: "User account not found" });
+    }
+
+    if (input.email && input.email !== user.email) {
+      const existing = await db.query.users.findFirst({
+        where: eq(users.email, input.email),
+      });
+      if (existing && existing.id !== userId) {
+        throw new HTTPException(409, { message: "A user with this email address already exists" });
+      }
+    }
+
+    const updateData: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.email !== undefined) updateData.email = input.email;
+    if (input.role !== undefined) updateData.role = input.role;
+
+    const [updated] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new HTTPException(500, { message: "Failed to update user profile" });
+    }
+
+    return sanitizeUser(updated);
+  }
 }
 
 export const authService = new AuthService();
+

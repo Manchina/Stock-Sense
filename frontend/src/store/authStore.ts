@@ -15,13 +15,18 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   signup: (data: {
     name: string;
     email: string;
     password: string;
     role?: 'inventory_manager' | 'warehouse_staff';
   }) => Promise<void>;
+  updateProfile: (data: {
+    name?: string;
+    email?: string;
+    role?: 'inventory_manager' | 'warehouse_staff';
+  }) => Promise<User>;
   checkAuth: () => Promise<void>;
   logout: () => void;
   setUser: (user: User | null) => void;
@@ -49,7 +54,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  login: async (email: string, password = 'password123') => {
+  login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
       const data = await api.post<AuthResponse>('/auth/login', {
@@ -95,6 +100,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      set({ isLoading: false, error: msg });
+      throw err;
+    }
+  },
+
+  updateProfile: async (profileData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api.put<{ user: User }>('/auth/me', profileData);
+      localStorage.setItem('stocksense_user', JSON.stringify(res.user));
+      set({
+        user: res.user,
+        isLoading: false,
+        error: null,
+      });
+      return res.user;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update profile.';
       set({ isLoading: false, error: msg });
       throw err;
     }

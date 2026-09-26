@@ -4,9 +4,8 @@ import { Boxes, Lock, Mail, ArrowRight, Shield, AlertCircle } from 'lucide-react
 import { useAuthStore } from '../../store/authStore';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('sarah.connor@stocksense.io');
-  const [password, setPassword] = useState('password123');
-  const [role, setRole] = useState<'inventory_manager' | 'warehouse_staff'>('inventory_manager');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -15,7 +14,7 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setErrorMsg(null);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       navigate('/dashboard');
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
@@ -46,50 +45,6 @@ export const Login: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Role quick selector */}
-            <div className="form-control">
-              <label className="label py-1">
-                <span className="label-text font-bold text-xs text-slate-700">
-                  Quick Demo Profile
-                </span>
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('inventory_manager');
-                    setEmail('sarah.connor@stocksense.io');
-                    setPassword('password123');
-                    setErrorMsg(null);
-                  }}
-                  className={`btn btn-sm ${
-                    role === 'inventory_manager'
-                      ? 'btn-primary text-white font-bold'
-                      : 'btn-outline border-2 border-slate-300 text-slate-700 bg-white'
-                  } rounded-xl text-xs`}
-                >
-                  <Shield className="w-3.5 h-3.5 mr-1" />
-                  Manager
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('warehouse_staff');
-                    setEmail('alex.miller@stocksense.io');
-                    setPassword('password123');
-                    setErrorMsg(null);
-                  }}
-                  className={`btn btn-sm ${
-                    role === 'warehouse_staff'
-                      ? 'btn-primary text-white font-bold'
-                      : 'btn-outline border-2 border-slate-300 text-slate-700 bg-white'
-                  } rounded-xl text-xs`}
-                >
-                  <Boxes className="w-3.5 h-3.5 mr-1" />
-                  Staff
-                </button>
-              </div>
-            </div>
 
             {/* Email */}
             <div className="form-control">

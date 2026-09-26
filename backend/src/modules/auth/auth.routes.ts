@@ -11,3 +11,9 @@ authRoutes.post("/otp/request", (c) => authController.requestOtp(c));
 authRoutes.post("/otp/verify", (c) => authController.verifyOtp(c));
 authRoutes.post("/reset-password", (c) => authController.resetPassword(c));
 authRoutes.get("/me", authMiddleware, (c) => authController.getMe(c));
+authRoutes.put("/me", authMiddleware, (c) => authController.updateProfile(c));
+authRoutes.patch("/me", authMiddleware, (c) => authController.updateProfile(c));
+authRoutes.get("/profile", authMiddleware, (c) => authController.getMe(c));
+authRoutes.put("/profile", authMiddleware, (c) => authController.updateProfile(c));
+authRoutes.patch("/profile", authMiddleware, (c) => authController.updateProfile(c));
+
