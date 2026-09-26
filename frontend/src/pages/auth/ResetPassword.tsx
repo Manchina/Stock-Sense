@@ -6,19 +6,12 @@ import { api } from '../../lib/api';
 export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email') || '';
-  const devOtp = searchParams.get('devOtp') || '';
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [newPassword, setNewPassword] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (devOtp && devOtp.length === 6) {
-      setOtp(devOtp.split(''));
-    }
-  }, [devOtp]);
 
   const handleOtpChange = (val: string, index: number) => {
     // Only accept numeric digits
@@ -109,19 +102,6 @@ export const ResetPassword: React.FC = () => {
             <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div className="font-semibold">{errorMsg}</div>
-            </div>
-          )}
-
-          {devOtp && (
-            <div className="mb-4 p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-center justify-between">
-              <span>Demo OTP Code: <strong className="font-mono text-sm">{devOtp}</strong></span>
-              <button
-                type="button"
-                onClick={() => setOtp(devOtp.split(''))}
-                className="text-primary font-bold hover:underline"
-              >
-                Auto-fill
-              </button>
             </div>
           )}
 

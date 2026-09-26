@@ -45,3 +45,12 @@ export const resetPasswordSchema = z.object({
 });
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(100).optional(),
+  email: z.string().trim().email("Invalid email address").toLowerCase().optional(),
+  role: z.enum(["inventory_manager", "warehouse_staff"]).optional(),
+});
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+

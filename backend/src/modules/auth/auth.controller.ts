@@ -6,6 +6,7 @@ import {
   refreshTokenSchema,
   resetPasswordSchema,
   signupSchema,
+  updateProfileSchema,
 } from "../../shared/validators/auth.validator";
 import { authService } from "./auth.service";
 
@@ -77,6 +78,18 @@ export class AuthController {
     const user = c.get("user");
     return c.json({ user }, 200);
   }
+
+  /**
+   * PUT/PATCH /auth/me or /auth/profile (Protected)
+   */
+  async updateProfile(c: Context) {
+    const userId = c.get("userId");
+    const body = await c.req.json();
+    const validated = updateProfileSchema.parse(body);
+    const updatedUser = await authService.updateProfile(userId, validated);
+    return c.json({ user: updatedUser }, 200);
+  }
 }
 
 export const authController = new AuthController();
+

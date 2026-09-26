@@ -15,15 +15,11 @@ export const ForgotPassword: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const res = await api.post<{ success: boolean; message: string; otp?: string }>('/auth/otp/request', {
+      await api.post<{ success: boolean; message: string }>('/auth/otp/request', {
         email,
       });
 
-      // Navigate to reset password page with email and optional dev OTP
       const query = new URLSearchParams({ email });
-      if (res.otp) {
-        query.set('devOtp', res.otp);
-      }
       navigate(`/reset-password?${query.toString()}`);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to request OTP. Please try again.');
