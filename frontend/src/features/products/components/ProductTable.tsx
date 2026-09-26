@@ -1,48 +1,52 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Edit2, Trash2 } from 'lucide-react';
 import { Product } from '../../../types/common';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StockStatus } from '../../../components/inventory/StockStatus';
 import { formatCurrency } from '../../../lib/utils';
 
-import { Edit2, Trash2 } from 'lucide-react';
-
 interface ProductTableProps {
   products: Product[];
   isLoading?: boolean;
   onDelete?: (product: Product) => void;
-  currentPage?: number;
-  totalPages?: number;
-  onPageChange?: (page: number) => void;
+  pageSize?: number;
+  searchValue?: string;
+  onSearchChange?: (val: string) => void;
+  filtersComponent?: React.ReactNode;
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({
   products,
   isLoading,
   onDelete,
-  currentPage,
-  totalPages,
-  onPageChange,
+  pageSize = 10,
+  searchValue,
+  onSearchChange,
+  filtersComponent,
 }) => {
   const navigate = useNavigate();
 
   const columns: Column<Product>[] = [
     {
       header: 'Product / SKU',
+      accessorKey: 'name',
+      sortable: true,
       cell: (p) => (
         <div>
           <div className="font-bold text-slate-900 group-hover:text-primary transition-colors">
             {p.name}
           </div>
-          <div className="font-mono text-xs text-slate-500 uppercase font-semibold">{p.sku}</div>
+          <div className="font-mono text-[11px] text-slate-500 uppercase font-semibold">{p.sku}</div>
         </div>
       ),
     },
     {
       header: 'Category',
       accessorKey: 'category',
+      sortable: true,
       cell: (p) => (
-        <span className="badge badge-sm bg-slate-100 text-slate-800 border-slate-300 font-semibold">
+        <span className="badge badge-sm bg-slate-100 text-slate-800 border-slate-300 font-semibold text-[11px]">
           {p.category}
         </span>
       ),
@@ -50,10 +54,12 @@ export const ProductTable: React.FC<ProductTableProps> = ({
     {
       header: 'UoM',
       accessorKey: 'unitOfMeasure',
-      cell: (p) => <span className="text-xs text-slate-600 font-medium">{p.unitOfMeasure}</span>,
+      cell: (p) => <span className="text-xs text-slate-600 font-semibold">{p.unitOfMeasure}</span>,
     },
     {
       header: 'Stock Level',
+      accessorKey: 'currentStock',
+      sortable: true,
       cell: (p) => (
         <StockStatus
           currentStock={p.currentStock}
@@ -64,6 +70,8 @@ export const ProductTable: React.FC<ProductTableProps> = ({
     },
     {
       header: 'Selling Price',
+      accessorKey: 'sellingPrice',
+      sortable: true,
       className: 'text-right',
       cell: (p) => (
         <span className="font-bold text-xs text-slate-900">
@@ -105,12 +113,16 @@ export const ProductTable: React.FC<ProductTableProps> = ({
       data={products}
       keyExtractor={(p) => p.id}
       isLoading={isLoading}
+      pageSize={pageSize}
+      showSearch={Boolean(onSearchChange)}
+      searchValue={searchValue}
+      searchPlaceholder="Search products by SKU, name, or category..."
+      onSearchChange={onSearchChange}
+      filters={filtersComponent}
       emptyTitle="No products found"
       emptyDescription="Create your first inventory product or adjust your search filters."
-      currentPage={currentPage}
-      totalPages={totalPages}
-      onPageChange={onPageChange}
       onRowClick={(p) => navigate(`/products/${p.id}`)}
+      paginationPosition="top"
     />
   );
 };

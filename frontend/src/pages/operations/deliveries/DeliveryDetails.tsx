@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { CheckCircle2, Box, PackageCheck, Truck, Ban } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import { Box, PackageCheck, Truck, Ban, ArrowRight } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
-import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { OperationStatusBar } from '../../../components/ui/OperationStatusBar';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
+import { OperationStatus } from '../../../types/common';
 
 export const DeliveryDetails: React.FC = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
@@ -12,7 +13,7 @@ export const DeliveryDetails: React.FC = () => {
     INITIAL_OPERATIONS.find((o) => o.id === deliveryId) || INITIAL_OPERATIONS[1]
   );
 
-  const handleStepAction = (nextStatus: 'waiting' | 'ready' | 'done') => {
+  const handleStepAction = (nextStatus: OperationStatus) => {
     setOperation({
       ...operation,
       status: nextStatus,
@@ -42,36 +43,30 @@ export const DeliveryDetails: React.FC = () => {
         )}
       </PageHeader>
 
-      {/* 3-Step Outbound Workflow Wizard */}
-      <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-xs space-y-6">
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Warehouse Fulfillment Workflow (Pick → Pack → Validate)
-        </h3>
+      {/* Amazon-Style Order Status Tracker */}
+      <OperationStatusBar
+        status={operation.status}
+        type="delivery"
+        documentNumber={operation.documentNumber}
+        createdAt={operation.createdAt}
+        scheduledDate={operation.scheduledDate}
+        validatedAt={operation.validatedAt}
+        validatedBy={operation.validatedBy}
+        partner={operation.partner}
+        sourceLocation={operation.sourceLocation}
+        onAdvanceStatus={handleStepAction}
+      />
 
-        <ul className="steps steps-vertical sm:steps-horizontal w-full text-xs font-semibold">
-          <li className={`step ${operation.status !== 'draft' ? 'step-primary' : ''}`}>
-            1. Pick Items from Shelf
-          </li>
-          <li
-            className={`step ${
-              operation.status === 'ready' || operation.status === 'done' ? 'step-primary' : ''
-            }`}
-          >
-            2. Pack & Label Box
-          </li>
-          <li className={`step ${operation.status === 'done' ? 'step-success' : ''}`}>
-            3. Validate & Deduct Stock
-          </li>
-        </ul>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          <div className="flex items-center gap-2">
-            <StatusBadge status={operation.status} size="md" />
-            {operation.status === 'done' && (
-              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> Stock decreased automatically
-              </span>
-            )}
+      {/* Fulfillment Actions Card */}
+      {operation.status !== 'done' && operation.status !== 'canceled' && (
+        <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Next Step in Workflow</h4>
+            <p className="text-sm font-bold text-slate-800 mt-0.5">
+              {operation.status === 'draft' && 'Items need to be picked from warehouse shelf.'}
+              {operation.status === 'waiting' && 'Items picked. Proceed to packing and box labeling.'}
+              {operation.status === 'ready' && 'Ready for dispatch carrier. Confirm shipment to deduct inventory.'}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -101,49 +96,56 @@ export const DeliveryDetails: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Overview Card */}
+      {/* Document Overview */}
       <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-xs space-y-4">
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+          Customer & Shipment Info
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
             <span className="text-slate-500 font-medium block mb-0.5">Customer / Recipient:</span>
-            <span className="text-sm font-bold text-slate-900">{operation.partner}</span>
+            <span className="text-sm font-bold text-slate-900">{operation.partner || 'Direct Customer'}</span>
           </div>
           <div>
-            <span className="text-slate-500 font-medium block mb-0.5">Source Dispatch Location:</span>
-            <span className="text-sm font-bold text-slate-900">{operation.sourceLocation}</span>
+            <span className="text-slate-500 font-medium block mb-0.5">Source Warehouse:</span>
+            <span className="text-sm font-bold text-slate-900">{operation.sourceLocation || 'Main Warehouse'}</span>
           </div>
           <div>
-            <span className="text-slate-500 font-medium block mb-0.5">Scheduled Delivery:</span>
+            <span className="text-slate-500 font-medium block mb-0.5">Target Delivery Date:</span>
             <span className="text-sm font-bold text-slate-900">{operation.scheduledDate || 'Immediate'}</span>
           </div>
         </div>
 
-        {operation.notes && (
-          <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-200 mt-2 font-medium">
-            <span className="font-bold text-slate-900">Order Notes: </span>
-            {operation.notes}
+        {operation.status === 'done' && (
+          <div className="pt-2 flex justify-end">
+            <Link
+              to="/operations/move-history"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+            >
+              See this deduction in Stock Move History <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         )}
       </div>
 
-      {/* Items Table */}
+      {/* Outbound Items */}
       <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b-2 border-slate-200 font-bold text-sm text-slate-900 bg-slate-50">
-          Outbound Line Items
+          Packed Line Items
         </div>
         <table className="table w-full text-xs">
           <thead>
             <tr className="bg-slate-100 border-b border-slate-200">
               <th>Product Name</th>
               <th>SKU</th>
-              <th className="text-right">Quantity Deducted</th>
+              <th className="text-right">Quantity Outbound</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {operation.items.map((item, idx) => (
-              <tr key={idx}>
+              <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="font-bold text-slate-900">{item.productName}</td>
                 <td className="font-mono text-slate-500 font-medium">{item.sku}</td>
                 <td className="text-right font-black text-rose-700 text-sm">

@@ -78,6 +78,8 @@ export const Dashboard: React.FC = () => {
   const columns: Column<OperationDocument>[] = [
     {
       header: 'Reference',
+      accessorKey: 'documentNumber',
+      sortable: true,
       cell: (op) => {
         const typeInfo = DOCUMENT_TYPE_CONFIG[op.type] || {
           label: op.type.toUpperCase(),
@@ -85,10 +87,10 @@ export const Dashboard: React.FC = () => {
         };
         return (
           <div>
-            <div className="font-bold text-slate-900 font-mono text-xs hover:text-primary transition-colors">
+            <div className="font-bold text-slate-900 font-mono text-xs hover:text-primary transition-colors cursor-pointer">
               {op.documentNumber}
             </div>
-            <div className={`text-[11px] font-semibold ${typeInfo.color}`}>
+            <div className={`text-[11px] font-bold ${typeInfo.color}`}>
               {typeInfo.label}
             </div>
           </div>
@@ -121,7 +123,7 @@ export const Dashboard: React.FC = () => {
       ),
     },
     {
-      header: 'Items',
+      header: 'Items Breakdown',
       cell: (op) => (
         <div className="text-xs space-y-0.5">
           {op.items && op.items.length > 0 ? (
@@ -146,10 +148,14 @@ export const Dashboard: React.FC = () => {
     },
     {
       header: 'Status',
+      accessorKey: 'status',
+      sortable: true,
       cell: (op) => <StatusBadge status={op.status} />,
     },
     {
       header: 'Date',
+      accessorKey: 'createdAt',
+      sortable: true,
       cell: (op) => (
         <span className="text-xs font-medium text-slate-600">
           {formatDate(op.createdAt)}
@@ -174,7 +180,7 @@ export const Dashboard: React.FC = () => {
         <button
           onClick={handleManualRefresh}
           disabled={isRefreshing}
-          className="btn btn-outline border-2 border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 hover:bg-slate-50 gap-1.5"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 hover:bg-slate-50 gap-1.5 shadow-2xs"
           title="Refresh real-time data from database"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
@@ -189,7 +195,7 @@ export const Dashboard: React.FC = () => {
         </button>
         <button
           onClick={() => navigate('/operations/deliveries/new')}
-          className="btn btn-outline border-2 border-slate-300 btn-sm rounded-xl font-bold bg-white gap-1"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 gap-1"
         >
           <Plus className="w-4 h-4" />
           New Delivery
@@ -289,9 +295,11 @@ export const Dashboard: React.FC = () => {
           columns={columns}
           data={operations.slice(0, 4)}
           keyExtractor={(op) => op.id}
+          pageSize={4}
           emptyTitle="No recent operations recorded"
           emptyDescription="Create a new receipt, delivery, or transfer to start tracking stock movements."
           onRowClick={handleRowClick}
+          paginationPosition="top"
         />
       </div>
     </div>

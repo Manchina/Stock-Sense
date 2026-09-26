@@ -2,8 +2,6 @@ import { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { db } from "../../config/db";
 import { products } from "../../db/schema/products.schema";
-import { stockLevels } from "../../db/schema/stock-levels.schema";
-import { reorderRules } from "../../db/schema/reorder-rules.schema";
 
 /**
  * GET /api/v1/products/:id/stock

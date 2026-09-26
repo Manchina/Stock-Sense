@@ -1,8 +1,7 @@
 import { Context } from "hono";
-import { eq, ilike, or, desc, and, sql } from "drizzle-orm";
+import { eq, ilike, or, desc, and } from "drizzle-orm";
 import { db } from "../../config/db";
 import { products } from "../../db/schema/products.schema";
-import { categories } from "../../db/schema/categories.schema";
 import { formatProductResponse } from "./product.helper";
 
 /**

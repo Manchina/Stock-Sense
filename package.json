@@ -8,6 +8,7 @@
     "frontend"
   ],
   "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:frontend": "npm run dev --workspace=frontend",
     "build:backend": "npm run build --workspace=backend",
@@ -18,5 +19,8 @@
     "db:studio": "npm run db:studio --workspace=backend",
     "db:check": "npm run db:check --workspace=backend",
     "test": "npm run test --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

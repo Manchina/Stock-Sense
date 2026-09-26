@@ -13,6 +13,9 @@ import { formatProductResponse } from "./product.helper";
 export async function getProductReorderRulesHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.json({ success: false, message: "Product ID is required" }, 400);
+    }
 
     const rules = await db.query.reorderRules.findMany({
       where: eq(reorderRules.productId, id),
@@ -61,6 +64,9 @@ export async function getProductReorderRulesHandler(c: Context) {
 export async function setProductReorderRuleHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.json({ success: false, message: "Product ID is required" }, 400);
+    }
     const body = await c.req.json();
     const parsed = reorderRuleSchema.safeParse(body);
 
@@ -103,13 +109,17 @@ export async function setProductReorderRuleHandler(c: Context) {
       });
     }
 
+    if (!locationId) {
+      return c.json({ success: false, message: "Location ID is required" }, 400);
+    }
+
     const [created] = await db
       .insert(reorderRules)
       .values({
         productId: id,
-        locationId,
-        minQty,
-        maxQty,
+        locationId: locationId,
+        minQty: minQty ?? 0,
+        maxQty: maxQty ?? 0,
       })
       .returning();
 

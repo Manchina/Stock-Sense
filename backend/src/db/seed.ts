@@ -3,6 +3,7 @@ import { pool, db } from "../config/db";
 import { warehouses, locations } from "./schema/warehouses.schema";
 import { categories } from "./schema/categories.schema";
 import { products } from "./schema/products.schema";
+import { receipts, receiptLines } from "./schema/receipts.schema";
 import { users } from "./schema/users.schema";
 import { hashPassword } from "../lib/password";
 import { executeStockMovement } from "../services/stock.service";
@@ -92,7 +93,7 @@ export async function seed() {
         })
         .returning();
       console.log(`  ✅ User seeded: ${u.email} (${u.role})`);
-      if (u.role === "inventory_manager" && !managerUserId) {
+      if (inserted && u.role === "inventory_manager" && !managerUserId) {
         managerUserId = inserted.id;
       }
     } else {
@@ -119,6 +120,10 @@ export async function seed() {
           isActive: whData.isActive,
         })
         .returning();
+
+      if (!newWh) {
+        throw new Error(`Failed to insert warehouse ${whData.name}`);
+      }
 
       console.log(`  ➕ Inserted warehouse: ${newWh.name} (${newWh.code})`);
 
@@ -154,6 +159,11 @@ export async function seed() {
           isActive: true,
         })
         .returning();
+
+      if (!newCat) {
+        throw new Error(`Failed to insert category ${catData.name}`);
+      }
+
       categoryMap.set(catData.name, newCat.id);
       console.log(`  ✅ Category seeded: ${newCat.name}`);
     } else {
@@ -236,6 +246,124 @@ export async function seed() {
     }
   } else {
     console.log(`  ℹ️ Products already exist (${existingProducts.length} found)`);
+  }
+
+  // 5. Seed Initial Receipts if none exist
+  const existingReceipts = await db.select().from(receipts);
+  if (existingReceipts.length === 0) {
+    const allProds = await db.select().from(products);
+    const allWarehouses = await db.query.warehouses.findMany({ with: { locations: true } });
+    const mainWh = allWarehouses.find((w) => w.code === "WH-MAIN") || allWarehouses[0];
+    const prodWh = allWarehouses.find((w) => w.code === "WH-PROD") || allWarehouses[0];
+
+    const rackA = mainWh?.locations.find((l) => l.name.includes("Rack A")) || mainWh?.locations[0];
+    const rackB = mainWh?.locations.find((l) => l.name.includes("Rack B")) || mainWh?.locations[0];
+    const stagingLoc = prodWh?.locations.find((l) => l.name.includes("Finished Goods")) || prodWh?.locations[0];
+
+    const steelProd = allProds.find((p) => p.sku === "RAW-STL-12MM") || allProds[0];
+    const boltProd = allProds.find((p) => p.sku === "CMP-BLT-M8") || allProds[0];
+    const chairProd = allProds.find((p) => p.sku === "FGD-CHR-ERG") || allProds[0];
+
+    if (mainWh && rackA && steelProd && managerUserId) {
+      // 5.1 Validated Receipt (done -> stock movement credited in ledger & visible in Move History)
+      await db.transaction(async (tx) => {
+        const [rec1] = await tx
+          .insert(receipts)
+          .values({
+            receiptNumber: "REC-2026-0001",
+            supplierName: "Apex Steel Industries",
+            destinationWarehouseId: mainWh.id,
+            destinationLocationId: rackA.id,
+            status: "done",
+            notes: "Inbound raw materials shipment PO-8821",
+            expectedDate: new Date("2026-02-10T10:00:00Z"),
+            validatedAt: new Date("2026-02-10T10:30:00Z"),
+            validatedBy: managerUserId,
+            createdBy: managerUserId,
+          })
+          .returning();
+
+        if (rec1) {
+          await tx.insert(receiptLines).values({
+            receiptId: rec1.id,
+            productId: steelProd.id,
+            qtyExpected: 50,
+            qtyReceived: 50,
+          });
+
+          await executeStockMovement(tx, {
+            productId: steelProd.id,
+            locationId: rackA.id,
+            deltaQty: 50,
+            sourceType: "receipt",
+            sourceId: rec1.id,
+            notes: `Receipt REC-2026-0001 from Apex Steel Industries`,
+            userId: managerUserId,
+          });
+        }
+      });
+      console.log("  ✅ Seeded Validated Receipt: REC-2026-0001 (+50 Steel Rods in Ledger)");
+    }
+
+    if (mainWh && rackB && boltProd && managerUserId) {
+      // 5.2 Ready Receipt
+      await db.transaction(async (tx) => {
+        const [rec2] = await tx
+          .insert(receipts)
+          .values({
+            receiptNumber: "REC-2026-0002",
+            supplierName: "Global Hardware Supplies",
+            destinationWarehouseId: mainWh.id,
+            destinationLocationId: rackB.id,
+            status: "ready",
+            notes: "Fasteners restock batch for assembly line",
+            expectedDate: new Date("2026-03-01T09:00:00Z"),
+            createdBy: managerUserId,
+          })
+          .returning();
+
+        if (rec2) {
+          await tx.insert(receiptLines).values({
+            receiptId: rec2.id,
+            productId: boltProd.id,
+            qtyExpected: 200,
+            qtyReceived: 0,
+          });
+        }
+      });
+      console.log("  ✅ Seeded Ready Receipt: REC-2026-0002");
+    }
+
+    if (prodWh && stagingLoc && chairProd && managerUserId) {
+      // 5.3 Waiting Receipt
+      await db.transaction(async (tx) => {
+        const [rec3] = await tx
+          .insert(receipts)
+          .values({
+            receiptNumber: "REC-2026-0003",
+            supplierName: "Comfort Seating Corp",
+            destinationWarehouseId: prodWh.id,
+            destinationLocationId: stagingLoc.id,
+            status: "waiting",
+            notes: "Office furniture consignment delivery",
+            expectedDate: new Date("2026-03-15T14:00:00Z"),
+            createdBy: managerUserId,
+          })
+          .returning();
+
+        if (rec3) {
+          await tx.insert(receiptLines).values({
+            receiptId: rec3.id,
+            productId: chairProd.id,
+            qtyExpected: 15,
+            qtyReceived: 0,
+          });
+        }
+      });
+      console.log("  ✅ Seeded Waiting Receipt: REC-2026-0003");
+    }
+  } else {
+    console.log(`  ℹ️ Receipts already exist (${existingReceipts.length} found)`);
   }
 
   console.log("🎉 Seeding complete!");

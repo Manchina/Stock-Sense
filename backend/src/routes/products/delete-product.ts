@@ -52,16 +52,16 @@ export async function deleteProductHandler(c: Context) {
     if (!isReferenced) {
       // Check operational lines sequentially if no ledger entry
       const hasReceipts = await db.query.receiptLines.findFirst({
-        where: eq(receiptLines.productId, id),
+        where: eq(receiptLines.productId, productId),
       });
       const hasDeliveries = !hasReceipts && (await db.query.deliveryLines.findFirst({
-        where: eq(deliveryLines.productId, id),
+        where: eq(deliveryLines.productId, productId),
       }));
       const hasTransfers = !hasReceipts && !hasDeliveries && (await db.query.transferLines.findFirst({
-        where: eq(transferLines.productId, id),
+        where: eq(transferLines.productId, productId),
       }));
       const hasAdjustments = !hasReceipts && !hasDeliveries && !hasTransfers && (await db.query.adjustmentLines.findFirst({
-        where: eq(adjustmentLines.productId, id),
+        where: eq(adjustmentLines.productId, productId),
       }));
 
       isReferenced = !!(hasReceipts || hasDeliveries || hasTransfers || hasAdjustments);
@@ -72,7 +72,7 @@ export async function deleteProductHandler(c: Context) {
       await db
         .update(products)
         .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(products.id, id));
+        .where(eq(products.id, productId));
 
       return c.json({
         success: true,
@@ -83,7 +83,7 @@ export async function deleteProductHandler(c: Context) {
     }
 
     // Unreferenced product can be safely deleted
-    await db.delete(products).where(eq(products.id, id));
+    await db.delete(products).where(eq(products.id, productId));
 
     return c.json({
       success: true,

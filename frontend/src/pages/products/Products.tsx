@@ -2,18 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { ProductFilters } from '../../features/products/components/ProductFilters';
 import { ProductTable } from '../../features/products/components/ProductTable';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { productsApi } from '../../features/products/api';
 import { ProductFilterState } from '../../features/products/types';
 import { Product } from '../../types/common';
-import { usePagination } from '../../hooks/usePagination';
+import { PRODUCT_CATEGORIES } from '../../lib/constants';
 
 export const Products: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>(PRODUCT_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -73,11 +72,6 @@ export const Products: React.FC = () => {
     });
   }, [products, filters]);
 
-  const { paginatedItems, currentPage, totalPages, goToPage } = usePagination({
-    items: filteredProducts,
-    pageSize: 8,
-  });
-
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     try {
@@ -89,6 +83,38 @@ export const Products: React.FC = () => {
     }
   };
 
+  const productFiltersComponent = (
+    <div className="flex items-center gap-2">
+      {/* Category Filter */}
+      <select
+        value={filters.category}
+        onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+        className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-lg shrink-0 h-8 min-h-8"
+      >
+        <option value="all">All Categories</option>
+        {categories.map((cat) => (
+          <option key={cat} value={cat}>
+            {cat}
+          </option>
+        ))}
+      </select>
+
+      {/* Stock Status Filter */}
+      <select
+        value={filters.stockStatus}
+        onChange={(e) =>
+          setFilters({ ...filters, stockStatus: e.target.value as ProductFilterState['stockStatus'] })
+        }
+        className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-lg shrink-0 h-8 min-h-8"
+      >
+        <option value="all">All Stock Status</option>
+        <option value="in_stock">In Stock</option>
+        <option value="low_stock">Low Stock Alerts</option>
+        <option value="out_of_stock">Out of Stock</option>
+      </select>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -98,7 +124,7 @@ export const Products: React.FC = () => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing || isLoading}
-          className="btn btn-outline border-slate-300 btn-sm sm:btn-md rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 flex items-center"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 flex items-center"
           title="Refresh products list"
         >
           <RefreshCw className={`w-4 h-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -106,7 +132,7 @@ export const Products: React.FC = () => {
         </button>
         <button
           onClick={() => navigate('/products/new')}
-          className="btn btn-primary btn-sm sm:btn-md rounded-xl text-white font-bold shadow-xs flex items-center"
+          className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs flex items-center"
         >
           <Plus className="w-4 h-4 mr-1.5" />
           Add Product
@@ -119,15 +145,13 @@ export const Products: React.FC = () => {
         </div>
       )}
 
-      <ProductFilters filters={filters} onChange={setFilters} categories={categories} />
-
       <ProductTable
-        products={paginatedItems}
+        products={filteredProducts}
         isLoading={isLoading}
+        searchValue={filters.search}
+        onSearchChange={(val) => setFilters({ ...filters, search: val })}
+        filtersComponent={productFiltersComponent}
         onDelete={(prod) => setDeleteTarget(prod)}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={goToPage}
       />
 
       <ConfirmDialog

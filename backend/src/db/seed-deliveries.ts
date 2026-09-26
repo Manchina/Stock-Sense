@@ -1,6 +1,6 @@
 import { pool, db } from "../config/db";
 import { deliveryOrders, deliveryLines } from "./schema/deliveries.schema";
-import { warehouses, locations } from "./schema/warehouses.schema";
+import { warehouses } from "./schema/warehouses.schema";
 import { products } from "./schema/products.schema";
 import { users } from "./schema/users.schema";
 import { eq } from "drizzle-orm";
@@ -45,12 +45,12 @@ export async function seedDeliveries() {
       customerName: "Modern Workspaces Corp",
       customerRef: "PO-MW-882",
       sourceWarehouseId: wh.id,
-      sourceLocationId: wh.locations[0].id,
+      sourceLocationId: wh.locations[0]!.id,
       status: "ready" as const,
       notes: "Priority corporate order dispatch.",
       lines: [
         {
-          productId: prods[0].id,
+          productId: prods[0]!.id,
           qtyOrdered: 10,
           qtyPicked: 10,
           qtyDelivered: 0,
@@ -62,12 +62,12 @@ export async function seedDeliveries() {
       customerName: "Acme Industrial Supplies",
       customerRef: "REQ-9901",
       sourceWarehouseId: wh.id,
-      sourceLocationId: wh.locations[wh.locations.length - 1].id,
+      sourceLocationId: wh.locations[wh.locations.length - 1]!.id,
       status: "waiting" as const,
       notes: "Awaiting packaging completion.",
       lines: [
         {
-          productId: prods[1]?.id || prods[0].id,
+          productId: prods[1]?.id || prods[0]!.id,
           qtyOrdered: 25,
           qtyPicked: 0,
           qtyDelivered: 0,
@@ -79,14 +79,14 @@ export async function seedDeliveries() {
       customerName: "Global Tech Logistics",
       customerRef: "GTL-774",
       sourceWarehouseId: wh.id,
-      sourceLocationId: wh.locations[0].id,
+      sourceLocationId: wh.locations[0]!.id,
       status: "done" as const,
       notes: "Completed standard freight delivery.",
       validatedAt: new Date(Date.now() - 86400000 * 2),
       validatedBy: defaultUser.id,
       lines: [
         {
-          productId: prods[prods.length - 1].id,
+          productId: prods[prods.length - 1]!.id,
           qtyOrdered: 15,
           qtyPicked: 15,
           qtyDelivered: 15,
@@ -111,6 +111,8 @@ export async function seedDeliveries() {
         createdBy: defaultUser.id,
       })
       .returning();
+
+    if (!inserted) continue;
 
     for (const line of item.lines) {
       await db.insert(deliveryLines).values({
