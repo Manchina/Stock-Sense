@@ -96,22 +96,26 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const zod = useCallback(
     (err: unknown, fallbackMessage?: string) => {
       if (err instanceof ApiError) {
+        const hasFields = err.zodError?.fieldErrors && err.zodError.fieldErrors.length > 0;
         return showToast({
-          type: 'zod',
-          title: err.zodError.title || 'Validation Error',
-          message: err.zodError.summary || err.message,
+          type: hasFields ? 'zod' : 'error',
+          title: hasFields ? (err.zodError.title || 'Validation Error') : 'Operation Failed',
+          message: err.message,
           zodError: err.zodError,
           duration: 9000,
         });
       }
 
       const anyError = err as any;
-      if (anyError?.response?.data || anyError?.data || anyError?.errors) {
-        const formatted = formatZodApiError(anyError.data || anyError.response?.data || anyError);
+      const errorPayload = anyError?.response?.data || anyError?.data || anyError?.errors ? (anyError.data || anyError.response?.data || anyError) : null;
+      if (errorPayload) {
+        const formatted = formatZodApiError(errorPayload);
+        const hasFields = formatted.fieldErrors && formatted.fieldErrors.length > 0;
+        const apiMsg = errorPayload.message || errorPayload.error || formatted.summary;
         return showToast({
-          type: 'zod',
-          title: formatted.title,
-          message: formatted.summary,
+          type: hasFields ? 'zod' : 'error',
+          title: hasFields ? formatted.title : 'Validation Error',
+          message: apiMsg,
           zodError: formatted,
           duration: 9000,
         });
@@ -119,11 +123,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return showToast({
         type: 'error',
-        title: 'Validation Error',
+        title: 'Error',
         message:
           (err instanceof Error ? err.message : String(err)) ||
           fallbackMessage ||
-          'Form validation failed. Please check the inputs.',
+          'Operation failed. Please try again.',
       });
     },
     [showToast]

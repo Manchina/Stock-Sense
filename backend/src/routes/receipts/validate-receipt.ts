@@ -4,7 +4,7 @@ import { db } from "../../config/db";
 import { receipts, receiptLines } from "../../db/schema/receipts.schema";
 import { locations } from "../../db/schema/warehouses.schema";
 import { resolveDefaultUserId, formatReceiptResponse } from "./receipt.helper";
-import { executeStockMovement } from "../../services/stock.service";
+import { executeStockMovement, InsufficientStockError } from "../../services/stock.service";
 
 /**
  * POST /api/v1/receipts/:id/validate
@@ -152,13 +152,20 @@ export async function validateReceiptHandler(c: Context) {
     });
   } catch (error) {
     console.error("Error validating receipt:", error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isClientError =
+      error instanceof InsufficientStockError ||
+      errorMsg.includes("Insufficient") ||
+      errorMsg.includes("not found") ||
+      errorMsg.includes("Cannot modify");
+
     return c.json(
       {
         success: false,
-        message: "Failed to validate receipt",
-        error: error instanceof Error ? error.message : String(error),
+        message: errorMsg,
+        error: errorMsg,
       },
-      500
+      isClientError ? 400 : 500
     );
   }
 }

@@ -8,7 +8,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-md w-full sm:w-96 pointer-events-none">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col-reverse gap-2.5 max-w-lg w-full px-4 sm:px-0 pointer-events-none items-center">
       {toasts.map((toast) => (
         <ToastCard key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
       ))}
@@ -21,7 +21,7 @@ const ToastCard: React.FC<{ toast: ToastItem; onClose: () => void }> = ({ toast,
 
   if (type === 'zod' && zodError && zodError.fieldErrors.length > 0) {
     return (
-      <div className="pointer-events-auto bg-white border-2 border-rose-300 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="pointer-events-auto w-full bg-white border-2 border-rose-300 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="bg-rose-50 px-4 py-3 border-b border-rose-200/80 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="p-1 bg-rose-500 text-white rounded-lg">
@@ -104,7 +104,7 @@ const ToastCard: React.FC<{ toast: ToastItem; onClose: () => void }> = ({ toast,
 
   return (
     <div
-      className={`pointer-events-auto p-3.5 rounded-2xl border-2 shadow-lg ${style.bg} animate-in fade-in slide-in-from-top-2 duration-300 flex items-start gap-3`}
+      className={`pointer-events-auto w-full p-3.5 rounded-2xl border-2 shadow-2xl ${style.bg} animate-in fade-in slide-in-from-bottom-4 duration-300 flex items-start gap-3`}
     >
       <div className={`p-1.5 rounded-xl shrink-0 ${style.iconBg}`}>
         <IconComponent className="w-4 h-4" />
