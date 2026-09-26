@@ -1,30 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Loader2 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { DataTable, Column } from '../../components/ui/DataTable';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { INITIAL_MOVE_HISTORY, DOCUMENT_TYPE_CONFIG } from '../../lib/constants';
 import { MoveHistoryRecord } from '../../types/common';
 import { formatDate } from '../../lib/utils';
+import { historyApi, mapBackendToMoveRecord } from '../../features/history/api';
 
 export const MoveHistory: React.FC = () => {
+  const [records, setRecords] = useState<MoveHistoryRecord[]>(INITIAL_MOVE_HISTORY);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const filtered = INITIAL_MOVE_HISTORY.filter((m) => {
-    if (typeFilter !== 'all' && m.documentType !== typeFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        m.referenceNumber.toLowerCase().includes(q) ||
-        m.productName.toLowerCase().includes(q) ||
-        m.sku.toLowerCase().includes(q) ||
-        m.fromLocation.toLowerCase().includes(q) ||
-        m.toLocation.toLowerCase().includes(q) ||
-        m.user.toLowerCase().includes(q)
-      );
+  const fetchHistory = useCallback(async () => {
+    try {
+      const response = await historyApi.getHistory({
+        type: typeFilter === 'all' ? undefined : typeFilter,
+        search: search.trim() ? search.trim() : undefined,
+      });
+
+      if (response && response.data && response.data.length > 0) {
+        const mapped = response.data.map(mapBackendToMoveRecord);
+        setRecords(mapped);
+      } else if (response && response.data && response.data.length === 0) {
+        // Fallback to initial mock history if backend database is fresh and search is empty
+        if (!search && typeFilter === 'all') {
+          setRecords(INITIAL_MOVE_HISTORY);
+        } else {
+          setRecords([]);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch history from API, falling back to local dataset:', err);
+      // Filter local mock data as fallback
+      const filtered = INITIAL_MOVE_HISTORY.filter((m) => {
+        if (typeFilter !== 'all' && m.documentType !== typeFilter) return false;
+        if (search) {
+          const q = search.toLowerCase();
+          return (
+            m.referenceNumber.toLowerCase().includes(q) ||
+            m.productName.toLowerCase().includes(q) ||
+            m.sku.toLowerCase().includes(q) ||
+            (m.fromLocation && m.fromLocation.toLowerCase().includes(q)) ||
+            (m.toLocation && m.toLocation.toLowerCase().includes(q)) ||
+            m.user.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      });
+      setRecords(filtered);
+    } finally {
+      setIsLoading(false);
     }
-    return true;
-  });
+  }, [typeFilter, search]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const columns: Column<MoveHistoryRecord>[] = [
     {
@@ -34,7 +68,9 @@ export const MoveHistory: React.FC = () => {
     {
       header: 'Reference #',
       cell: (m) => {
-        const typeInfo = DOCUMENT_TYPE_CONFIG[m.documentType];
+        const typeInfo =
+          DOCUMENT_TYPE_CONFIG[m.documentType] ||
+          DOCUMENT_TYPE_CONFIG.internal || { label: m.documentType, color: 'text-slate-600' };
         return (
           <div>
             <div className="font-bold text-slate-900 text-xs font-mono">{m.referenceNumber}</div>
@@ -55,12 +91,12 @@ export const MoveHistory: React.FC = () => {
     {
       header: 'From Location',
       accessorKey: 'fromLocation',
-      cell: (m) => <span className="text-xs text-slate-700 font-medium">{m.fromLocation}</span>,
+      cell: (m) => <span className="text-xs text-slate-700 font-medium">{m.fromLocation || '-'}</span>,
     },
     {
       header: 'To Location',
       accessorKey: 'toLocation',
-      cell: (m) => <span className="text-xs text-slate-900 font-bold">{m.toLocation}</span>,
+      cell: (m) => <span className="text-xs text-slate-900 font-bold">{m.toLocation || '-'}</span>,
     },
     {
       header: 'Qty Delta',
@@ -77,6 +113,17 @@ export const MoveHistory: React.FC = () => {
           {m.quantityChange > 0 ? `+${m.quantityChange}` : m.quantityChange} {m.unitOfMeasure}
         </span>
       ),
+    },
+    {
+      header: 'Balance After',
+      cell: (m) =>
+        m.balanceAfter !== undefined ? (
+          <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
+            {m.balanceAfter} {m.unitOfMeasure}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">-</span>
+        ),
     },
     {
       header: 'Operator',
@@ -108,18 +155,26 @@ export const MoveHistory: React.FC = () => {
           <option value="all">All Movements</option>
           <option value="receipt">Receipts (+In)</option>
           <option value="delivery">Deliveries (-Out)</option>
-          <option value="internal">Internal Transfers (⇄ Move)</option>
+          <option value="transfer">Internal Transfers (⇄ Move)</option>
           <option value="adjustment">Adjustments (± Delta)</option>
+          <option value="initial_inventory">Initial Inventory</option>
         </select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyExtractor={(m) => m.id}
-        emptyTitle="No move ledger records"
-        emptyDescription="All completed inventory operations will automatically append to this ledger."
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border-2 border-slate-200">
+          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+          <span className="text-sm font-semibold text-slate-600">Loading ledger movements...</span>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={records}
+          keyExtractor={(m) => m.id}
+          emptyTitle="No move ledger records"
+          emptyDescription="All completed inventory operations will automatically append to this ledger."
+        />
+      )}
     </div>
   );
 };

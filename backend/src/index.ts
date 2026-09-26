@@ -7,6 +7,7 @@ import { env } from "./config/env";
 import { warehouseRouter } from "./routes/warehouse";
 import { productsRouter } from "./routes/products";
 import { categoriesRouter } from "./routes/categories";
+import { historyRouter } from "./routes/history";
 
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
@@ -51,6 +52,8 @@ app.route("/api/products", productsRouter);
 
 app.route("/api/v1/categories", categoriesRouter);
 app.route("/api/categories", categoriesRouter);
+app.route("/api/v1/history", historyRouter);
+app.route("/api/history", historyRouter);
 
 app.get("/", (c) => {
   return c.json({
@@ -62,6 +65,7 @@ app.get("/", (c) => {
       warehouses: "/api/v1/warehouses",
       products: "/api/v1/products",
       categories: "/api/v1/categories",
+      history: "/api/v1/history",
     },
   });
 });
@@ -75,13 +79,13 @@ export const server =
   env.NODE_ENV === "test" || process.env.VITEST
     ? null
     : serve(
-        {
-          fetch: app.fetch,
-          port: env.PORT,
-        },
-        (info) => {
-          console.log(`🚀 StockSense API server listening on http://localhost:${info.port}`);
-        }
-      );
+      {
+        fetch: app.fetch,
+        port: env.PORT,
+      },
+      (info) => {
+        console.log(`🚀 StockSense API server listening on http://localhost:${info.port}`);
+      }
+    );
 
 export default app;

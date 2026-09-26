@@ -1,6 +1,6 @@
 export type OperationStatus = 'draft' | 'waiting' | 'ready' | 'done' | 'canceled';
 
-export type DocumentType = 'receipt' | 'delivery' | 'internal' | 'adjustment';
+export type DocumentType = 'receipt' | 'delivery' | 'internal' | 'transfer' | 'adjustment' | 'initial_inventory';
 
 export interface User {
   id: string;
@@ -67,11 +67,13 @@ export interface MoveHistoryRecord {
   documentType: DocumentType;
   productName: string;
   sku: string;
-  fromLocation: string;
-  toLocation: string;
+  fromLocation?: string;
+  toLocation?: string;
   quantityChange: number; // e.g. +50 or -20
+  balanceAfter?: number;
   unitOfMeasure: string;
   user: string;
+  notes?: string;
 }
 
 export interface DashboardKPIs {
