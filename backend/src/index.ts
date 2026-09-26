@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { testConnection } from "./config/db";
 import { env } from "./config/env";
+import { warehouseRouter } from "./routes/warehouse";
 
 const app = new Hono();
 
@@ -33,12 +34,19 @@ app.get("/health", async (c) => {
   });
 });
 
+// Routes
+app.route("/api/v1/warehouses", warehouseRouter);
+app.route("/api/warehouses", warehouseRouter);
+
 app.get("/", (c) => {
   return c.json({
     name: "StockSense API",
     version: "1.0.0",
     description: "Production-grade Inventory Management System API",
     healthCheck: "/health",
+    endpoints: {
+      warehouses: "/api/v1/warehouses",
+    },
   });
 });
 
