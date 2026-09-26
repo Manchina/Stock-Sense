@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { ProductFilters } from '../../features/products/components/ProductFilters';
 import { ProductTable } from '../../features/products/components/ProductTable';
@@ -13,8 +13,11 @@ import { usePagination } from '../../hooks/usePagination';
 export const Products: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<ProductFilterState>({
     search: '',
@@ -23,18 +26,29 @@ export const Products: React.FC = () => {
   });
 
   const loadProducts = async () => {
-    setIsLoading(true);
     try {
+      setErrorMessage(null);
       const data = await productsApi.getAll();
       setProducts(data);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to load products');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     loadProducts();
+    productsApi.getCategories().then((cats) => {
+      if (cats && cats.length > 0) setCategories(cats);
+    });
   }, []);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    loadProducts();
+  };
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -47,7 +61,7 @@ export const Products: React.FC = () => {
         if (!matchName && !matchSku && !matchCat) return false;
       }
       // Category
-      if (filters.category !== 'all' && p.category !== filters.category) {
+      if (filters.category !== 'all' && p.category.toLowerCase() !== filters.category.toLowerCase()) {
         return false;
       }
       // Stock Status
@@ -66,9 +80,13 @@ export const Products: React.FC = () => {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
-    await productsApi.delete(deleteTarget.id);
-    setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
-    setDeleteTarget(null);
+    try {
+      await productsApi.delete(deleteTarget.id);
+      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to delete product');
+    }
   };
 
   return (
@@ -78,6 +96,15 @@ export const Products: React.FC = () => {
         subtitle="Manage product master data, SKU codes, categories, units of measure, and stock availability."
       >
         <button
+          onClick={handleRefresh}
+          disabled={isRefreshing || isLoading}
+          className="btn btn-outline border-slate-300 btn-sm sm:btn-md rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 flex items-center"
+          title="Refresh products list"
+        >
+          <RefreshCw className={`w-4 h-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+        <button
           onClick={() => navigate('/products/new')}
           className="btn btn-primary btn-sm sm:btn-md rounded-xl text-white font-bold shadow-xs flex items-center"
         >
@@ -86,7 +113,13 @@ export const Products: React.FC = () => {
         </button>
       </PageHeader>
 
-      <ProductFilters filters={filters} onChange={setFilters} />
+      {errorMessage && (
+        <div className="alert alert-warning text-xs font-semibold rounded-xl">
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      <ProductFilters filters={filters} onChange={setFilters} categories={categories} />
 
       <ProductTable
         products={paginatedItems}
@@ -100,7 +133,7 @@ export const Products: React.FC = () => {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title="Delete Product"
-        message={`Are you sure you want to delete "${deleteTarget?.name}" (${deleteTarget?.sku})? This will remove all associated stock ledger references.`}
+        message={`Are you sure you want to delete "${deleteTarget?.name}" (${deleteTarget?.sku})? This will deactivate the item and preserve stock ledger integrity.`}
         confirmLabel="Delete"
         variant="danger"
         onConfirm={handleDeleteConfirm}

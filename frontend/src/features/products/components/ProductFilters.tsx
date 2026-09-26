@@ -6,9 +6,14 @@ import { PRODUCT_CATEGORIES } from '../../../lib/constants';
 interface ProductFiltersProps {
   filters: ProductFilterState;
   onChange: (filters: ProductFilterState) => void;
+  categories?: string[];
 }
 
-export const ProductFilters: React.FC<ProductFiltersProps> = ({ filters, onChange }) => {
+export const ProductFilters: React.FC<ProductFiltersProps> = ({
+  filters,
+  onChange,
+  categories = PRODUCT_CATEGORIES,
+}) => {
   return (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-white p-3 rounded-2xl border-2 border-slate-200 shadow-xs">
       <div className="flex-1 min-w-[200px]">
@@ -27,7 +32,7 @@ export const ProductFilters: React.FC<ProductFiltersProps> = ({ filters, onChang
           className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-lg shrink-0"
         >
           <option value="all">All Categories</option>
-          {PRODUCT_CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <option key={cat} value={cat}>
               {cat}
             </option>

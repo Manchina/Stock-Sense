@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product } from '../../types/common';
 import { INITIAL_PRODUCTS } from '../../lib/constants';
+import { productsApi } from '../../features/products/api';
 
 interface ProductSelectProps {
   value: string;
@@ -14,14 +15,30 @@ interface ProductSelectProps {
 export const ProductSelect: React.FC<ProductSelectProps> = ({
   value,
   onChange,
-  products = INITIAL_PRODUCTS,
+  products: passedProducts,
   label = 'Select Product',
   required = false,
   className,
 }) => {
+  const [internalProducts, setInternalProducts] = useState<Product[]>(
+    passedProducts || INITIAL_PRODUCTS
+  );
+
+  useEffect(() => {
+    if (passedProducts) {
+      setInternalProducts(passedProducts);
+    } else {
+      productsApi.getAll().then((loaded) => {
+        if (loaded && loaded.length > 0) {
+          setInternalProducts(loaded);
+        }
+      });
+    }
+  }, [passedProducts]);
+
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
-    const selectedProduct = products.find((p) => p.id === selectedId);
+    const selectedProduct = internalProducts.find((p) => p.id === selectedId);
     onChange(selectedId, selectedProduct);
   };
 
@@ -43,7 +60,7 @@ export const ProductSelect: React.FC<ProductSelectProps> = ({
         <option value="" disabled>
           Choose a product...
         </option>
-        {products.map((prod) => (
+        {internalProducts.map((prod) => (
           <option key={prod.id} value={prod.id}>
             {prod.name} ({prod.sku}) — Available: {prod.currentStock} {prod.unitOfMeasure}
           </option>

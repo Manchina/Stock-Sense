@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProductFormData } from '../types';
 import { validateProductForm } from '../schemas';
-import { PRODUCT_CATEGORIES, UNITS_OF_MEASURE, INITIAL_WAREHOUSES } from '../../../lib/constants';
+import { PRODUCT_CATEGORIES, UNITS_OF_MEASURE } from '../../../lib/constants';
+import { productsApi } from '../api';
 
 interface ProductFormProps {
   initialData?: Partial<ProductFormData>;
@@ -14,6 +15,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   onSubmit,
   isEditing = false,
 }) => {
+  const [categoriesList, setCategoriesList] = useState<string[]>(PRODUCT_CATEGORIES);
+  const [locationsList, setLocationsList] = useState<string[]>([]);
+
   const [formData, setFormData] = useState<ProductFormData>({
     name: initialData?.name || '',
     sku: initialData?.sku || '',
@@ -24,8 +28,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     costPrice: initialData?.costPrice ?? 0,
     sellingPrice: initialData?.sellingPrice ?? 0,
     description: initialData?.description || '',
-    initialLocation: initialData?.initialLocation || 'WH-MAIN / Rack A',
+    initialLocation: initialData?.initialLocation || '',
   });
+
+  useEffect(() => {
+    productsApi.getCategories().then((cats) => {
+      if (cats && cats.length > 0) {
+        setCategoriesList(cats);
+      }
+    });
+
+    productsApi.getWarehouseLocations().then((locs) => {
+      if (locs && locs.length > 0) {
+        setLocationsList(locs);
+        if (!formData.initialLocation) {
+          setFormData((prev) => ({ ...prev, initialLocation: locs[0] }));
+        }
+      }
+    });
+  }, []);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -98,7 +119,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="select select-sm select-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
             >
-              {PRODUCT_CATEGORIES.map((c) => (
+              {categoriesList.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -193,13 +214,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 onChange={(e) => setFormData({ ...formData, initialLocation: e.target.value })}
                 className="select select-sm select-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium"
               >
-                {INITIAL_WAREHOUSES.flatMap((w) =>
-                  w.locations.map((loc) => (
-                    <option key={`${w.code} / ${loc}`} value={`${w.code} / ${loc}`}>
-                      {w.code} → {loc}
-                    </option>
-                  ))
-                )}
+                {locationsList.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
               </select>
             </div>
           )}

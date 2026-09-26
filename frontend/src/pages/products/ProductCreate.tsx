@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { ProductForm } from '../../features/products/components/ProductForm';
 import { ProductFormData } from '../../features/products/types';
@@ -8,12 +9,16 @@ import { productsApi } from '../../features/products/api';
 export const ProductCreate: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (data: ProductFormData) => {
     setIsLoading(true);
+    setErrorMsg(null);
     try {
       const created = await productsApi.create(data);
       navigate(`/products/${created.id}`);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to register product');
     } finally {
       setIsLoading(false);
     }
@@ -47,6 +52,13 @@ export const ProductCreate: React.FC = () => {
           )}
         </button>
       </PageHeader>
+
+      {errorMsg && (
+        <div className="alert alert-error text-xs font-semibold rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       <ProductForm onSubmit={handleSubmit} isEditing={false} />
     </div>
