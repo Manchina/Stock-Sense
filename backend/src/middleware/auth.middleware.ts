@@ -46,12 +46,11 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
     c.set("userId", user.id);
 
     return await next();
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Invalid or expired token";
+  } catch {
     return c.json(
       {
         error: "Unauthorized",
-        message: errorMessage,
+        message: "Invalid or expired token",
       },
       401
     );

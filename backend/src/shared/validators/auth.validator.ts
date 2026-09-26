@@ -4,7 +4,7 @@ export const signupSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
   email: z.string().trim().email("Invalid email address").toLowerCase(),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
-  role: z.enum(["inventory_manager", "warehouse_staff"]).default("warehouse_staff"),
+  role: z.enum(["super_admin", "inventory_manager", "warehouse_staff"]).default("warehouse_staff"),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
@@ -49,7 +49,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100).optional(),
   email: z.string().trim().email("Invalid email address").toLowerCase().optional(),
-  role: z.enum(["inventory_manager", "warehouse_staff"]).optional(),
+  role: z.enum(["super_admin", "inventory_manager", "warehouse_staff"]).optional(),
 });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

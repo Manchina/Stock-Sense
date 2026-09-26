@@ -2,11 +2,13 @@ export type OperationStatus = 'draft' | 'waiting' | 'ready' | 'done' | 'canceled
 
 export type DocumentType = 'receipt' | 'delivery' | 'internal' | 'transfer' | 'adjustment' | 'initial_inventory';
 
+export type UserRole = 'super_admin' | 'inventory_manager' | 'warehouse_staff';
+
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'inventory_manager' | 'warehouse_staff' | 'admin';
+  role: UserRole;
   avatar?: string;
   warehouseId?: string;
 }

@@ -5,6 +5,7 @@ import { Product } from '../../../types/common';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StockStatus } from '../../../components/inventory/StockStatus';
 import { formatCurrency } from '../../../lib/utils';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface ProductTableProps {
   products: Product[];
@@ -26,6 +27,8 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   filtersComponent,
 }) => {
   const navigate = useNavigate();
+  const { isManager, isSuperAdmin } = useAuth();
+  const canEdit = isSuperAdmin || isManager;
 
   const columns: Column<Product>[] = [
     {
@@ -84,14 +87,16 @@ export const ProductTable: React.FC<ProductTableProps> = ({
       className: 'text-right',
       cell: (p) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => navigate(`/products/${p.id}/edit`)}
-            className="btn btn-ghost btn-xs text-slate-500 hover:text-primary hover:bg-blue-50 rounded-lg p-1.5"
-            title="Edit Product"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => navigate(`/products/${p.id}/edit`)}
+              className="btn btn-ghost btn-xs text-slate-500 hover:text-primary hover:bg-blue-50 rounded-lg p-1.5"
+              title="Edit Product"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"

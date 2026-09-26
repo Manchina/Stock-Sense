@@ -8,9 +8,12 @@ import { productsApi } from '../../features/products/api';
 import { ProductFilterState } from '../../features/products/types';
 import { Product } from '../../types/common';
 import { PRODUCT_CATEGORIES } from '../../lib/constants';
+import { useAuth } from '../../hooks/useAuth';
 
 export const Products: React.FC = () => {
   const navigate = useNavigate();
+  const { isManager, isSuperAdmin } = useAuth();
+  const canManage = isSuperAdmin || isManager;
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>(PRODUCT_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,13 +133,15 @@ export const Products: React.FC = () => {
           <RefreshCw className={`w-4 h-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh
         </button>
-        <button
-          onClick={() => navigate('/products/new')}
-          className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs flex items-center"
-        >
-          <Plus className="w-4 h-4 mr-1.5" />
-          Add Product
-        </button>
+        {canManage && (
+          <button
+            onClick={() => navigate('/products/new')}
+            className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            Add Product
+          </button>
+        )}
       </PageHeader>
 
       {errorMessage && (
@@ -151,7 +156,7 @@ export const Products: React.FC = () => {
         searchValue={filters.search}
         onSearchChange={(val) => setFilters({ ...filters, search: val })}
         filtersComponent={productFiltersComponent}
-        onDelete={(prod) => setDeleteTarget(prod)}
+        onDelete={canManage ? (prod) => setDeleteTarget(prod) : undefined}
       />
 
       <ConfirmDialog

@@ -4,11 +4,13 @@ import { Boxes, Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { toast } from '../../context/ToastContext';
 
+import { UserRole } from '../../types/common';
+
 export const Signup: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'inventory_manager' | 'warehouse_staff'>('inventory_manager');
+  const [role, setRole] = useState<UserRole>('inventory_manager');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { signup, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -97,7 +99,7 @@ export const Signup: React.FC = () => {
               </label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as any)}
+                onChange={(e) => setRole(e.target.value as UserRole)}
                 className="select select-bordered w-full bg-white border-2 border-slate-300 text-slate-900 rounded-xl text-sm font-medium"
               >
                 <option value="inventory_manager">Inventory Manager (Full In/Out Control)</option>

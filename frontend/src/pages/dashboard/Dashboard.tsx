@@ -191,7 +191,7 @@ export const Dashboard: React.FC = () => {
         <button
           onClick={handleManualRefresh}
           disabled={isRefreshing}
-          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 hover:bg-slate-50 gap-1.5 shadow-2xs"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 gap-1.5 shadow-2xs"
           title="Refresh real-time data from database"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
@@ -206,24 +206,12 @@ export const Dashboard: React.FC = () => {
         </button>
         <button
           onClick={() => navigate('/operations/deliveries/new')}
-          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 gap-1"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-100 hover:text-slate-900 gap-1"
         >
           <Plus className="w-4 h-4" />
           New Delivery
         </button>
       </PageHeader>
-
-      {/* Live sync status banner */}
-      <div className="flex items-center justify-between text-xs px-1 text-slate-500 font-medium">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span>PostgreSQL Live Ledger Connected</span>
-        </div>
-        <span>Last synced: {lastRefreshedAt.toLocaleTimeString()}</span>
-      </div>
 
       {/* Critical Out-of-Stock Alert Banner */}
       {criticalAlerts.length > 0 && (

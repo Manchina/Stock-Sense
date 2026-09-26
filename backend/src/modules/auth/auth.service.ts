@@ -12,7 +12,7 @@ export interface SafeUser {
   id: string;
   name: string;
   email: string;
-  role: "inventory_manager" | "warehouse_staff";
+  role: "super_admin" | "inventory_manager" | "warehouse_staff";
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -308,8 +308,9 @@ export class AuthService {
 
   /**
    * Update authenticated user profile details.
+   * Only Super Admins are authorized to change or assign roles.
    */
-  async updateProfile(userId: string, input: UpdateProfileInput): Promise<SafeUser> {
+  async updateProfile(userId: string, input: UpdateProfileInput, currentUser?: SafeUser): Promise<SafeUser> {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
@@ -327,13 +328,24 @@ export class AuthService {
       }
     }
 
+    // Role modification permission check: Only Super Admin can change user roles
+    if (input.role !== undefined && input.role !== user.role) {
+      if (currentUser?.role !== "super_admin") {
+        throw new HTTPException(403, {
+          message: "Permission denied: Only Super Admins can modify assigned roles.",
+        });
+      }
+    }
+
     const updateData: Partial<typeof users.$inferInsert> = {
       updatedAt: new Date(),
     };
 
     if (input.name !== undefined) updateData.name = input.name;
     if (input.email !== undefined) updateData.email = input.email;
-    if (input.role !== undefined) updateData.role = input.role;
+    if (input.role !== undefined && currentUser?.role === "super_admin") {
+      updateData.role = input.role;
+    }
 
     const [updated] = await db
       .update(users)
