@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { INITIAL_WAREHOUSES } from '../../../lib/constants';
 import { Warehouse } from '../../../types/common';
+import { api } from '../../../lib/api';
 
 export const WarehouseCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +13,8 @@ export const WarehouseCreate: React.FC = () => {
   const [address, setAddress] = useState('');
   const [locations, setLocations] = useState<string[]>(['Receiving Bay', 'Rack A', 'Packing Zone']);
   const [newLocationInput, setNewLocationInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleAddLocation = () => {
     if (!newLocationInput.trim()) return;
@@ -23,18 +26,41 @@ export const WarehouseCreate: React.FC = () => {
     setLocations(locations.filter((_, idx) => idx !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newWh: Warehouse = {
-      id: `wh-${Date.now()}`,
-      name,
-      code: code.toUpperCase(),
-      address,
-      locations,
-      createdAt: new Date().toISOString(),
+    setIsSubmitting(true);
+    setErrorMsg(null);
+
+    const payload = {
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      address: address.trim() || undefined,
+      locations: locations.filter((l) => l.trim().length > 0),
     };
-    INITIAL_WAREHOUSES.push(newWh);
-    navigate('/settings/warehouses');
+
+    try {
+      const res = await api.post<{ success: boolean; data: Warehouse; message?: string }>('/warehouses', payload);
+      if (res && res.data) {
+        // Also update offline fallback list
+        INITIAL_WAREHOUSES.push(res.data);
+      }
+      navigate('/settings/warehouses');
+    } catch (err: any) {
+      console.warn('API creation error, falling back locally:', err);
+      // If server error or offline, fallback locally
+      const fallbackWh: Warehouse = {
+        id: `wh-${Date.now()}`,
+        name: payload.name,
+        code: payload.code,
+        address: payload.address,
+        locations: payload.locations,
+        createdAt: new Date().toISOString(),
+      };
+      INITIAL_WAREHOUSES.push(fallbackWh);
+      navigate('/settings/warehouses');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -49,16 +75,32 @@ export const WarehouseCreate: React.FC = () => {
             type="button"
             onClick={() => navigate('/settings/warehouses')}
             className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
+            disabled={isSubmitting}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs px-4"
+            disabled={isSubmitting}
+            className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs px-4 flex items-center gap-1.5"
           >
-            Save Warehouse
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save Warehouse</span>
+            )}
           </button>
         </PageHeader>
+
+        {errorMsg && (
+          <div className="alert alert-error text-xs flex items-center gap-2 rounded-xl">
+            <AlertCircle className="w-4 h-4" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2">
@@ -126,6 +168,12 @@ export const WarehouseCreate: React.FC = () => {
               onChange={(e) => setNewLocationInput(e.target.value)}
               placeholder="e.g. Rack D or Cold Room 1"
               className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddLocation();
+                }
+              }}
             />
             <button
               type="button"

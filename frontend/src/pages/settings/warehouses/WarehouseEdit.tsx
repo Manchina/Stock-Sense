@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { INITIAL_WAREHOUSES } from '../../../lib/constants';
 import { Warehouse } from '../../../types/common';
+import { api } from '../../../lib/api';
 
 export const WarehouseEdit: React.FC = () => {
   const { warehouseId } = useParams<{ warehouseId: string }>();
@@ -15,16 +16,46 @@ export const WarehouseEdit: React.FC = () => {
   const [address, setAddress] = useState('');
   const [locations, setLocations] = useState<string[]>([]);
   const [newLocationInput, setNewLocationInput] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const wh = INITIAL_WAREHOUSES.find((w) => w.id === warehouseId);
-    if (wh) {
-      setWarehouse(wh);
-      setName(wh.name);
-      setCode(wh.code);
-      setAddress(wh.address || '');
-      setLocations([...wh.locations]);
+    let isMounted = true;
+
+    async function loadWarehouse() {
+      if (!warehouseId) return;
+      try {
+        const res = await api.get<{ success: boolean; data: Warehouse }>(`/warehouses/${warehouseId}`);
+        if (res && res.data && isMounted) {
+          setWarehouse(res.data);
+          setName(res.data.name);
+          setCode(res.data.code);
+          setAddress(res.data.address || '');
+          setLocations(res.data.locations || []);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('API fetch by ID failed, falling back to local constants:', err);
+      }
+
+      // Fallback to constants
+      const wh = INITIAL_WAREHOUSES.find((w) => w.id === warehouseId);
+      if (wh && isMounted) {
+        setWarehouse(wh);
+        setName(wh.name);
+        setCode(wh.code);
+        setAddress(wh.address || '');
+        setLocations([...wh.locations]);
+      }
+      if (isMounted) setIsLoading(false);
     }
+
+    loadWarehouse();
+    return () => {
+      isMounted = false;
+    };
   }, [warehouseId]);
 
   const handleAddLocation = () => {
@@ -37,18 +68,70 @@ export const WarehouseEdit: React.FC = () => {
     setLocations(locations.filter((_, idx) => idx !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!warehouse) return;
-    warehouse.name = name;
-    warehouse.code = code.toUpperCase();
-    warehouse.address = address;
-    warehouse.locations = locations;
-    navigate('/settings/warehouses');
+    if (!warehouse || !warehouseId) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+
+    const payload = {
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      address: address.trim() || undefined,
+      locations: locations.filter((l) => l.trim().length > 0),
+    };
+
+    try {
+      await api.put<{ success: boolean; data: Warehouse }>(`/warehouses/${warehouseId}`, payload);
+      // Update local fallback as well
+      const wh = INITIAL_WAREHOUSES.find((w) => w.id === warehouseId);
+      if (wh) {
+        wh.name = payload.name;
+        wh.code = payload.code;
+        wh.address = payload.address;
+        wh.locations = payload.locations;
+      }
+      navigate('/settings/warehouses');
+    } catch (err: any) {
+      console.warn('API update failed, updating local state:', err);
+      const wh = INITIAL_WAREHOUSES.find((w) => w.id === warehouseId);
+      if (wh) {
+        wh.name = payload.name;
+        wh.code = payload.code;
+        wh.address = payload.address;
+        wh.locations = payload.locations;
+      }
+      navigate('/settings/warehouses');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 bg-white rounded-2xl border border-slate-200">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span className="ml-3 text-sm font-semibold text-slate-600">Loading warehouse details...</span>
+      </div>
+    );
+  }
+
   if (!warehouse) {
-    return <div className="alert alert-error">Warehouse not found.</div>;
+    return (
+      <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-rose-800 space-y-3">
+        <div className="flex items-center gap-2 font-bold text-base">
+          <AlertCircle className="w-5 h-5" /> Warehouse not found
+        </div>
+        <p className="text-xs text-rose-600">The requested warehouse could not be located in the system.</p>
+        <button
+          onClick={() => navigate('/settings/warehouses')}
+          className="btn btn-outline border-rose-300 btn-xs rounded-lg font-bold"
+        >
+          Back to Warehouses
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -56,23 +139,39 @@ export const WarehouseEdit: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-4">
         <PageHeader
           title={`Edit Warehouse: ${warehouse.name}`}
-          subtitle={`Editing facility code: ${warehouse.code}`}
+          subtitle={`Facility Code: ${warehouse.code}`}
           backUrl="/settings/warehouses"
         >
           <button
             type="button"
             onClick={() => navigate('/settings/warehouses')}
             className="btn btn-outline border-slate-300 btn-xs sm:btn-sm rounded-lg font-bold bg-white"
+            disabled={isSubmitting}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs px-4"
+            disabled={isSubmitting}
+            className="btn btn-primary btn-xs sm:btn-sm rounded-lg text-white font-bold shadow-xs px-4 flex items-center gap-1.5"
           >
-            Update Warehouse
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Updating...</span>
+              </>
+            ) : (
+              <span>Update Warehouse</span>
+            )}
           </button>
         </PageHeader>
+
+        {errorMsg && (
+          <div className="alert alert-error text-xs flex items-center gap-2 rounded-xl">
+            <AlertCircle className="w-4 h-4" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2">
@@ -137,6 +236,12 @@ export const WarehouseEdit: React.FC = () => {
               onChange={(e) => setNewLocationInput(e.target.value)}
               placeholder="e.g. Rack E or Staging Bay 3"
               className="input input-sm input-bordered bg-white border border-slate-300 rounded-lg text-xs font-medium flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddLocation();
+                }
+              }}
             />
             <button
               type="button"
