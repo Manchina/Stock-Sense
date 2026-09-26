@@ -7,6 +7,7 @@ interface ProductSelectProps {
   value: string;
   onChange: (productId: string, product?: Product) => void;
   products?: Product[];
+  sourceLocation?: string;
   label?: string;
   required?: boolean;
   className?: string;
@@ -16,6 +17,7 @@ export const ProductSelect: React.FC<ProductSelectProps> = ({
   value,
   onChange,
   products: passedProducts,
+  sourceLocation,
   label = 'Select Product',
   required = false,
   className,
@@ -60,11 +62,21 @@ export const ProductSelect: React.FC<ProductSelectProps> = ({
         <option value="" disabled>
           Choose a product...
         </option>
-        {internalProducts.map((prod) => (
-          <option key={prod.id} value={prod.id}>
-            {prod.name} ({prod.sku}) — Available: {prod.currentStock} {prod.unitOfMeasure}
-          </option>
-        ))}
+        {internalProducts.map((prod) => {
+          const locStock =
+            sourceLocation && prod.locationStock && sourceLocation in prod.locationStock
+              ? prod.locationStock[sourceLocation]
+              : undefined;
+
+          return (
+            <option key={prod.id} value={prod.id}>
+              {prod.name} ({prod.sku}) —{' '}
+              {locStock !== undefined
+                ? `Available here: ${locStock} ${prod.unitOfMeasure || 'pcs'} (Total: ${prod.currentStock})`
+                : `Total Stock: ${prod.currentStock} ${prod.unitOfMeasure || 'pcs'}`}
+            </option>
+          );
+        })}
       </select>
     </div>
   );

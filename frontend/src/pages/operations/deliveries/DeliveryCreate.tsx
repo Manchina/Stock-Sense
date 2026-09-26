@@ -28,6 +28,16 @@ export const DeliveryCreate: React.FC = () => {
     productsApi.getAll().then((loaded) => {
       if (loaded && loaded.length > 0) {
         setAvailableProducts(loaded);
+        const firstProd = loaded[0];
+        if (firstProd && firstProd.locationStock) {
+          const currentLocStock = firstProd.locationStock[sourceLocation] ?? 0;
+          if (currentLocStock === 0) {
+            const locWithStock = Object.entries(firstProd.locationStock).find(([_, stock]) => stock > 0);
+            if (locWithStock) {
+              setSourceLocation(locWithStock[0]);
+            }
+          }
+        }
         setItems((prev) => {
           if (prev.length === 1 && (prev[0].productId === 'prod-1' || !loaded.some((p) => p.id === prev[0].productId))) {
             return [
@@ -80,6 +90,19 @@ export const DeliveryCreate: React.FC = () => {
       availableProducts.find((p) => p.id === productId) ||
       INITIAL_PRODUCTS.find((p) => p.id === productId);
     if (!prod) return;
+
+    // If currently selected source location has 0 stock for this product,
+    // but another location has available stock, auto-switch source location
+    if (prod.locationStock) {
+      const currentLocStock = prod.locationStock[sourceLocation] ?? 0;
+      if (currentLocStock === 0) {
+        const availableLoc = Object.entries(prod.locationStock).find(([_, stock]) => stock > 0);
+        if (availableLoc) {
+          setSourceLocation(availableLoc[0]);
+        }
+      }
+    }
+
     const updated = [...items];
     updated[index] = {
       ...updated[index],
@@ -307,50 +330,103 @@ export const DeliveryCreate: React.FC = () => {
             </button>
           </div>
 
-          <div className="space-y-2.5">
-            {items.map((item, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-end gap-3"
-              >
-                <div className="flex-1">
-                  <ProductSelect
-                    value={item.productId}
-                    products={availableProducts}
-                    onChange={(id, prod) => handleProductChange(idx, id, prod)}
-                    label={`Product Item #${idx + 1}`}
-                  />
-                </div>
+          <div className="space-y-3">
+            {items.map((item, idx) => {
+              const prod =
+                availableProducts.find((p) => p.id === item.productId) ||
+                INITIAL_PRODUCTS.find((p) => p.id === item.productId);
+              const locStock = prod?.locationStock?.[sourceLocation] ?? 0;
+              const hasInsufficientLocationStock = locStock < item.quantity;
+              const otherStockLocations = prod?.locationStock
+                ? Object.entries(prod.locationStock).filter(
+                    ([loc, stock]) => loc !== sourceLocation && stock > 0
+                  )
+                : [];
 
-                <div className="w-full sm:w-auto">
-                  <QuantityInput
-                    label="Quantity to Ship"
-                    value={item.quantity}
-                    onChange={(q) => handleQuantityChange(idx, q)}
-                  />
-                </div>
+              return (
+                <div
+                  key={idx}
+                  className={`p-3.5 bg-slate-50 rounded-xl border ${
+                    hasInsufficientLocationStock ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
+                  } space-y-2`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                    <div className="flex-1">
+                      <ProductSelect
+                        value={item.productId}
+                        products={availableProducts}
+                        sourceLocation={sourceLocation}
+                        onChange={(id, p) => handleProductChange(idx, id, p)}
+                        label={`Product Item #${idx + 1}`}
+                      />
+                    </div>
 
-                <div className="w-full sm:w-32">
-                  <label className="label py-0.5 mb-0.5">
-                    <span className="label-text font-bold text-xs text-slate-700">Unit of Measure</span>
-                  </label>
-                  <div className="h-8 min-h-8 px-3 flex items-center bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
-                    {item.unitOfMeasure || 'Units (pcs)'}
+                    <div className="w-full sm:w-auto">
+                      <QuantityInput
+                        label="Quantity to Ship"
+                        value={item.quantity}
+                        onChange={(q) => handleQuantityChange(idx, q)}
+                      />
+                    </div>
+
+                    <div className="w-full sm:w-32">
+                      <label className="label py-0.5 mb-0.5">
+                        <span className="label-text font-bold text-xs text-slate-700">Unit of Measure</span>
+                      </label>
+                      <div className="h-8 min-h-8 px-3 flex items-center bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
+                        {item.unitOfMeasure || 'Units (pcs)'}
+                      </div>
+                    </div>
+
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(idx)}
+                        className="btn btn-ghost btn-sm btn-square text-rose-600 hover:bg-rose-50 rounded-xl self-end sm:self-auto mb-1 sm:mb-0"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Stock Location Guidance Badge */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] border-t border-slate-200/60">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold ${
+                          locStock >= item.quantity
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {locStock >= item.quantity ? '✓ Stock Available' : '⚠ Insufficient Location Stock'}:{' '}
+                        {locStock} {item.unitOfMeasure || 'pcs'} at {sourceLocation}
+                      </span>
+                      <span className="text-slate-500 font-medium">
+                        (Total in company: {prod?.currentStock ?? 0} {item.unitOfMeasure || 'pcs'})
+                      </span>
+                    </div>
+
+                    {hasInsufficientLocationStock && otherStockLocations.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-amber-800 font-medium">Stock available in other bays:</span>
+                        {otherStockLocations.map(([loc, stock]) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={() => setSourceLocation(loc)}
+                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[10px] transition-colors shadow-2xs"
+                          >
+                            Switch origin to {loc} ({stock} pcs)
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    className="btn btn-ghost btn-sm btn-square text-rose-600 hover:bg-rose-50 rounded-xl self-end sm:self-auto mb-1 sm:mb-0"
-                    title="Remove item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

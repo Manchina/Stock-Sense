@@ -54,7 +54,7 @@ export function formatZodApiError(errorData: any): FormattedZodError {
   }
 
   return {
-    title: errorData.message || 'Form Validation Failed',
+    title: errorData.message || (fieldErrors.length > 0 ? 'Form Validation Failed' : 'Validation Error'),
     summary,
     fieldErrors,
   };

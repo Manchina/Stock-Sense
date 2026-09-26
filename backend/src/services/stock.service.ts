@@ -25,19 +25,16 @@ export class InsufficientStockError extends Error {
     public readonly productId: string,
     public readonly locationId: string,
     public readonly currentBalance: number,
-    public readonly requestedDelta: number
+    public readonly requestedDelta: number,
+    public readonly details?: string
   ) {
+    const needed = Math.abs(requestedDelta);
     super(
-      `Insufficient stock for product ${productId} at location ${locationId}. Current balance: ${currentBalance}, delta: ${deltaQtyToStr(
-        requestedDelta
-      )}`
+      details ||
+        `Insufficient stock: Required ${needed} units, but only ${currentBalance} units available at this location.`
     );
     this.name = "InsufficientStockError";
   }
-}
-
-function deltaQtyToStr(delta: number): string {
-  return delta >= 0 ? `+${delta}` : `${delta}`;
 }
 
 /**
@@ -84,11 +81,32 @@ export async function executeStockMovement(
 
   // 2. Invariant check: Prevent negative inventory unless explicitly permitted
   if (newBalance < 0 && !allowNegative) {
+    let prodLabel = `Product ${productId}`;
+    let locLabel = `Location ${locationId}`;
+    try {
+      const prod = await tx.query.products.findFirst({
+        where: (p: any, { eq }: any) => eq(p.id, productId),
+      });
+      if (prod) prodLabel = `'${prod.name}' (${prod.sku})`;
+
+      const loc = await tx.query.locations.findFirst({
+        where: (l: any, { eq }: any) => eq(l.id, locationId),
+        with: { warehouse: true },
+      });
+      if (loc) {
+        const whName = loc.warehouse?.code || loc.warehouse?.name || "Warehouse";
+        locLabel = `${whName} / ${loc.name}`;
+      }
+    } catch {
+      // Ignore lookup failure in error formatting
+    }
+
     throw new InsufficientStockError(
       productId,
       locationId,
       previousBalance,
-      deltaQty
+      deltaQty,
+      `Insufficient stock for ${prodLabel} at ${locLabel}. Available balance at this bay: ${previousBalance}, required: ${Math.abs(deltaQty)}.`
     );
   }
 
