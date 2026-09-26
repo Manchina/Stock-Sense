@@ -5,8 +5,9 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { ProductSelect } from '../../../components/inventory/ProductSelect';
 import { WarehouseSelect } from '../../../components/inventory/WarehouseSelect';
 import { QuantityInput } from '../../../components/inventory/QuantityInput';
-import { INITIAL_PRODUCTS, INITIAL_OPERATIONS } from '../../../lib/constants';
-import { OperationDocument, OperationItem } from '../../../types/common';
+import { INITIAL_PRODUCTS, INITIAL_OPERATIONS, UNITS_OF_MEASURE } from '../../../lib/constants';
+import { OperationDocument, OperationItem, Product } from '../../../types/common';
+import { productsApi } from '../../../features/products/api';
 
 export const TransferCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -16,19 +17,28 @@ export const TransferCreate: React.FC = () => {
   const [scheduledDate, setScheduledDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [availableProducts, setAvailableProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+
+  React.useEffect(() => {
+    productsApi.getAll().then((loaded) => {
+      if (loaded && loaded.length > 0) {
+        setAvailableProducts(loaded);
+      }
+    });
+  }, []);
 
   const [items, setItems] = useState<OperationItem[]>([
     {
-      productId: INITIAL_PRODUCTS[0].id,
-      productName: INITIAL_PRODUCTS[0].name,
-      sku: INITIAL_PRODUCTS[0].sku,
+      productId: INITIAL_PRODUCTS[0]?.id || 'prod-1',
+      productName: INITIAL_PRODUCTS[0]?.name || 'Steel Rods (12mm)',
+      sku: INITIAL_PRODUCTS[0]?.sku || 'RAW-STL-12MM',
       quantity: 50,
-      unitOfMeasure: INITIAL_PRODUCTS[0].unitOfMeasure,
+      unitOfMeasure: INITIAL_PRODUCTS[0]?.unitOfMeasure || 'Units (pcs)',
     },
   ]);
 
   const handleAddItem = () => {
-    const defaultProd = INITIAL_PRODUCTS[0];
+    const defaultProd = availableProducts[0] || INITIAL_PRODUCTS[0];
     setItems([
       ...items,
       {
@@ -36,7 +46,7 @@ export const TransferCreate: React.FC = () => {
         productName: defaultProd.name,
         sku: defaultProd.sku,
         quantity: 10,
-        unitOfMeasure: defaultProd.unitOfMeasure,
+        unitOfMeasure: defaultProd.unitOfMeasure || 'Units (pcs)',
       },
     ]);
   };
@@ -45,8 +55,11 @@ export const TransferCreate: React.FC = () => {
     setItems(items.filter((_, idx) => idx !== index));
   };
 
-  const handleProductChange = (index: number, productId: string) => {
-    const prod = INITIAL_PRODUCTS.find((p) => p.id === productId);
+  const handleProductChange = (index: number, productId: string, product?: Product) => {
+    const prod =
+      product ||
+      availableProducts.find((p) => p.id === productId) ||
+      INITIAL_PRODUCTS.find((p) => p.id === productId);
     if (!prod) return;
     const updated = [...items];
     updated[index] = {
@@ -54,7 +67,16 @@ export const TransferCreate: React.FC = () => {
       productId: prod.id,
       productName: prod.name,
       sku: prod.sku,
-      unitOfMeasure: prod.unitOfMeasure,
+      unitOfMeasure: prod.unitOfMeasure || 'Units (pcs)',
+    };
+    setItems(updated);
+  };
+
+  const handleUnitChange = (index: number, unit: string) => {
+    const updated = [...items];
+    updated[index] = {
+      ...updated[index],
+      unitOfMeasure: unit,
     };
     setItems(updated);
   };
@@ -191,7 +213,8 @@ export const TransferCreate: React.FC = () => {
                 <div className="flex-1">
                   <ProductSelect
                     value={item.productId}
-                    onChange={(id) => handleProductChange(idx, id)}
+                    products={availableProducts}
+                    onChange={(id, prod) => handleProductChange(idx, id, prod)}
                     label={`Product Item #${idx + 1}`}
                   />
                 </div>
@@ -201,18 +224,34 @@ export const TransferCreate: React.FC = () => {
                     label="Transfer Quantity"
                     value={item.quantity}
                     onChange={(q) => handleQuantityChange(idx, q)}
-                    unit={item.unitOfMeasure}
                   />
+                </div>
+
+                <div className="w-full sm:w-36">
+                  <label className="label py-0.5 mb-0.5">
+                    <span className="label-text font-bold text-xs text-slate-700">Unit</span>
+                  </label>
+                  <select
+                    value={item.unitOfMeasure || 'Units (pcs)'}
+                    onChange={(e) => handleUnitChange(idx, e.target.value)}
+                    className="select select-bordered select-sm w-full bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-xl"
+                  >
+                    {UNITS_OF_MEASURE.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {items.length > 1 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveItem(idx)}
-                    className="btn btn-ghost btn-xs btn-square text-rose-600 hover:bg-rose-50"
+                    className="btn btn-ghost btn-sm btn-square text-rose-600 hover:bg-rose-50 rounded-xl self-end sm:self-auto mb-1 sm:mb-0"
                     title="Remove item"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>

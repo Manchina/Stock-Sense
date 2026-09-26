@@ -1,8 +1,7 @@
 import { Context } from "hono";
-import { eq, or, desc, sql } from "drizzle-orm";
+import { eq, or, desc } from "drizzle-orm";
 import { db } from "../../config/db";
 import { categories } from "../../db/schema/categories.schema";
-import { products } from "../../db/schema/products.schema";
 import { createCategorySchema, updateCategorySchema } from "./category.schema";
 
 function slugify(text: string): string {
@@ -70,6 +69,9 @@ export async function getCategoriesHandler(c: Context) {
 export async function getCategoryByIdHandler(c: Context) {
   try {
     const idOrSlug = c.req.param("id");
+    if (!idOrSlug) {
+      return c.json({ success: false, message: "Category ID or slug is required" }, 400);
+    }
 
     const category = await db.query.categories.findFirst({
       where: or(eq(categories.id, idOrSlug), eq(categories.slug, idOrSlug)),
@@ -196,6 +198,9 @@ export async function createCategoryHandler(c: Context) {
 export async function updateCategoryHandler(c: Context) {
   try {
     const id = c.req.param("id");
+    if (!id) {
+      return c.json({ success: false, message: "Category ID is required" }, 400);
+    }
     const body = await c.req.json();
     const parsed = updateCategorySchema.safeParse(body);
 
@@ -285,6 +290,9 @@ export async function updateCategoryHandler(c: Context) {
 export async function deleteCategoryHandler(c: Context) {
   try {
     const id = c.req.param("id");
+    if (!id) {
+      return c.json({ success: false, message: "Category ID is required" }, 400);
+    }
 
     const existing = await db.query.categories.findFirst({
       where: eq(categories.id, id),

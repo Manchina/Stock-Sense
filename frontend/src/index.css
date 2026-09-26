@@ -3,19 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --primary: #1d4ed8;
+    --primary-focus: #1e40af;
+    --primary-content: #ffffff;
+  }
+
   body {
-    @apply antialiased bg-slate-50 text-slate-900;
+    @apply antialiased bg-[#f4f6fa] text-slate-900 selection:bg-blue-100 selection:text-blue-900;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
 @layer components {
-  /* Sleek, professional form controls with comfortable compact heights */
+  /* Apexon industrial form controls */
   .input,
   .select {
     height: 2.25rem !important;
     min-height: 2.25rem !important;
     font-size: 0.8125rem !important;
     line-height: 1.25rem !important;
+    border-radius: 0.75rem !important;
   }
 
   .input-sm,
@@ -23,10 +31,25 @@
     height: 2rem !important;
     min-height: 2rem !important;
     font-size: 0.75rem !important;
+    border-radius: 0.625rem !important;
+  }
+
+  /* Apexon cards with subtle border & shadow */
+  .apexon-card {
+    @apply bg-white rounded-2xl border-2 border-slate-200/90 shadow-xs transition-all;
+  }
+
+  /* Table styles */
+  .table th {
+    @apply py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-700 bg-slate-100/80;
+  }
+
+  .table td {
+    @apply py-3 px-4 text-xs font-medium text-slate-800;
   }
 }
 
-/* Custom scrollbars */
+/* Custom modern scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { eq, or, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../config/db";
 import { products } from "../../db/schema/products.schema";
 import { formatProductResponse } from "./product.helper";

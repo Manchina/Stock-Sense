@@ -79,14 +79,16 @@ export const Dashboard: React.FC = () => {
   const columns: Column<OperationDocument>[] = [
     {
       header: 'Reference',
+      accessorKey: 'documentNumber',
+      sortable: true,
       cell: (op) => {
         const typeInfo = DOCUMENT_TYPE_CONFIG[op.type];
         return (
           <div>
-            <div className="font-bold text-slate-900 hover:text-primary transition-colors">
+            <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">
               {op.documentNumber}
             </div>
-            <div className={`text-xs font-semibold ${typeInfo.color}`}>{typeInfo.label}</div>
+            <div className={`text-[11px] font-bold ${typeInfo.color}`}>{typeInfo.label}</div>
           </div>
         );
       },
@@ -102,12 +104,12 @@ export const Dashboard: React.FC = () => {
       ),
     },
     {
-      header: 'Items',
+      header: 'Items Breakdown',
       cell: (op) => (
         <div className="text-xs space-y-0.5">
           {op.items.map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
-              {i.quantity} {i.unitOfMeasure} × {i.productName}
+              <span className="font-bold text-slate-700">{i.quantity} {i.unitOfMeasure}</span> × {i.productName}
             </div>
           ))}
         </div>
@@ -115,10 +117,14 @@ export const Dashboard: React.FC = () => {
     },
     {
       header: 'Status',
+      accessorKey: 'status',
+      sortable: true,
       cell: (op) => <StatusBadge status={op.status} />,
     },
     {
       header: 'Date',
+      accessorKey: 'createdAt',
+      sortable: true,
       cell: (op) => <span className="text-xs font-medium text-slate-600">{formatDate(op.createdAt)}</span>,
     },
   ];
@@ -145,7 +151,7 @@ export const Dashboard: React.FC = () => {
         </button>
         <button
           onClick={() => navigate('/operations/deliveries/new')}
-          className="btn btn-outline border-2 border-slate-300 btn-sm rounded-xl font-bold bg-white"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50"
         >
           <Plus className="w-4 h-4 mr-1" />
           New Delivery
@@ -230,9 +236,11 @@ export const Dashboard: React.FC = () => {
           columns={columns}
           data={filteredOperations}
           keyExtractor={(op) => op.id}
+          pageSize={8}
           emptyTitle="No matching operations found"
           emptyDescription="Try resetting your filters or create a new operation document."
           onRowClick={handleRowClick}
+          paginationPosition="top"
         />
       </div>
     </div>

@@ -8,6 +8,7 @@ import { warehouseRouter } from "./routes/warehouse";
 import { productsRouter } from "./routes/products";
 import { categoriesRouter } from "./routes/categories";
 import { historyRouter } from "./routes/history";
+import { receiptsRouter } from "./routes/receipts";
 
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
@@ -55,6 +56,11 @@ app.route("/api/categories", categoriesRouter);
 app.route("/api/v1/history", historyRouter);
 app.route("/api/history", historyRouter);
 
+app.route("/api/v1/receipts", receiptsRouter);
+app.route("/api/receipts", receiptsRouter);
+app.route("/api/v1/recipients", receiptsRouter);
+app.route("/api/recipients", receiptsRouter);
+
 app.get("/", (c) => {
   return c.json({
     name: "StockSense API",
@@ -66,6 +72,7 @@ app.get("/", (c) => {
       products: "/api/v1/products",
       categories: "/api/v1/categories",
       history: "/api/v1/history",
+      receipts: "/api/v1/receipts",
     },
   });
 });

@@ -28,8 +28,21 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  get: async <T>(endpoint: string): Promise<T> => {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+  get: async <T>(endpoint: string, options?: { params?: Record<string, string | number | boolean | undefined> }): Promise<T> => {
+    let url = `${API_BASE_URL}${endpoint}`;
+    if (options?.params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(options.params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          searchParams.append(key, String(val));
+        }
+      });
+      const queryString = searchParams.toString();
+      if (queryString) {
+        url += (url.includes('?') ? '&' : '?') + queryString;
+      }
+    }
+    const res = await fetch(url, {
       headers: getAuthHeaders(),
     });
     return handleResponse<T>(res);

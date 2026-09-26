@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -8,32 +8,66 @@ import { SearchInput } from '../../../components/ui/SearchInput';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
+import { api } from '../../../lib/api';
 
 export const Adjustments: React.FC = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [adjustments, setAdjustments] = useState<OperationDocument[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  const adjustments = INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment');
+  const fetchAdjustments = useCallback(async () => {
+    try {
+      const response = await api.get<{ success: boolean; data: OperationDocument[] }>('/operations/adjustments', {
+        params: {
+          search: search.trim() ? search.trim() : undefined,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+        },
+      });
 
-  const filtered = adjustments.filter((a) => {
-    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        a.documentNumber.toLowerCase().includes(q) ||
-        a.sourceLocation?.toLowerCase().includes(q) ||
-        a.items.some((i) => i.productName.toLowerCase().includes(q))
-      );
+      if (response && response.data && Array.isArray(response.data)) {
+        setAdjustments(response.data);
+      }
+    } catch (err) {
+      console.warn('API fetch adjustments failed, falling back to local dataset:', err);
+      const fallbackList = INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment');
+      const filtered = fallbackList.filter((a) => {
+        if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+        if (search) {
+          const q = search.toLowerCase();
+          return (
+            a.documentNumber.toLowerCase().includes(q) ||
+            a.sourceLocation?.toLowerCase().includes(q) ||
+            a.items.some((i) => i.productName.toLowerCase().includes(q))
+          );
+        }
+        return true;
+      });
+      setAdjustments(filtered);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-    return true;
-  });
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    fetchAdjustments();
+  }, [fetchAdjustments]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchAdjustments();
+  };
 
   const columns: Column<OperationDocument>[] = [
     {
       header: 'Adjustment #',
+      accessorKey: 'documentNumber',
+      sortable: true,
       cell: (a) => (
-        <div className="font-bold text-slate-900 hover:text-primary">
+        <div className="font-bold text-slate-900 hover:text-primary transition-colors cursor-pointer">
           {a.documentNumber}
         </div>
       ),
@@ -41,6 +75,7 @@ export const Adjustments: React.FC = () => {
     {
       header: 'Location',
       accessorKey: 'sourceLocation',
+      sortable: true,
       cell: (a) => <span className="font-semibold text-xs text-slate-800">{a.sourceLocation || 'All Locations'}</span>,
     },
     {
@@ -60,10 +95,14 @@ export const Adjustments: React.FC = () => {
     },
     {
       header: 'Status',
+      accessorKey: 'status',
+      sortable: true,
       cell: (a) => <StatusBadge status={a.status} />,
     },
     {
       header: 'Date Created',
+      accessorKey: 'createdAt',
+      sortable: true,
       cell: (a) => <span className="text-xs font-medium text-slate-600">{formatDate(a.createdAt)}</span>,
     },
   ];
@@ -74,6 +113,15 @@ export const Adjustments: React.FC = () => {
         title="Inventory Stock Adjustments"
         subtitle="Reconcile physical inventory counts vs recorded stock, damage write-offs, and scrap corrections."
       >
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50"
+          title="Refresh adjustments from database"
+        >
+          <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
         <button
           onClick={() => navigate('/operations/adjustments/new')}
           className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs"
@@ -94,7 +142,7 @@ export const Adjustments: React.FC = () => {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-lg text-xs font-semibold"
+          className="select select-sm select-bordered bg-white border border-slate-300 text-slate-900 rounded-xl text-xs font-semibold"
         >
           <option value="all">All Statuses</option>
           <option value="draft">Draft</option>
@@ -105,11 +153,14 @@ export const Adjustments: React.FC = () => {
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={adjustments}
         keyExtractor={(a) => a.id}
+        isLoading={isLoading}
+        pageSize={10}
         emptyTitle="No stock adjustments found"
         emptyDescription="Create an adjustment to reconcile physical stock discrepancies."
         onRowClick={(a) => navigate(`/operations/adjustments/${a.id}`)}
+        paginationPosition="top"
       />
     </div>
   );

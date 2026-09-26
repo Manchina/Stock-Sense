@@ -15,6 +15,9 @@ import { stockLedger } from "../../db/schema/ledger.schema";
 export async function deleteProductHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.json({ success: false, message: "Product ID is required" }, 400);
+    }
 
     const existing = await db.query.products.findFirst({
       where: eq(products.id, id),

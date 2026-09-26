@@ -8,7 +8,6 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { productsApi } from '../../features/products/api';
 import { ProductFilterState } from '../../features/products/types';
 import { Product } from '../../types/common';
-import { usePagination } from '../../hooks/usePagination';
 
 export const Products: React.FC = () => {
   const navigate = useNavigate();
@@ -73,11 +72,6 @@ export const Products: React.FC = () => {
     });
   }, [products, filters]);
 
-  const { paginatedItems, currentPage, totalPages, goToPage } = usePagination({
-    items: filteredProducts,
-    pageSize: 8,
-  });
-
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     try {
@@ -98,7 +92,7 @@ export const Products: React.FC = () => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing || isLoading}
-          className="btn btn-outline border-slate-300 btn-sm sm:btn-md rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 flex items-center"
+          className="btn btn-outline border-slate-300 btn-sm rounded-xl font-bold bg-white text-slate-700 shadow-xs hover:bg-slate-50 flex items-center"
           title="Refresh products list"
         >
           <RefreshCw className={`w-4 h-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -106,7 +100,7 @@ export const Products: React.FC = () => {
         </button>
         <button
           onClick={() => navigate('/products/new')}
-          className="btn btn-primary btn-sm sm:btn-md rounded-xl text-white font-bold shadow-xs flex items-center"
+          className="btn btn-primary btn-sm rounded-xl text-white font-bold shadow-xs flex items-center"
         >
           <Plus className="w-4 h-4 mr-1.5" />
           Add Product
@@ -122,12 +116,9 @@ export const Products: React.FC = () => {
       <ProductFilters filters={filters} onChange={setFilters} categories={categories} />
 
       <ProductTable
-        products={paginatedItems}
+        products={filteredProducts}
         isLoading={isLoading}
         onDelete={(prod) => setDeleteTarget(prod)}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={goToPage}
       />
 
       <ConfirmDialog

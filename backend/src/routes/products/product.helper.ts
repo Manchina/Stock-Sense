@@ -1,7 +1,7 @@
 import { eq, or, ilike } from "drizzle-orm";
 import { db } from "../../config/db";
 import { categories } from "../../db/schema/categories.schema";
-import { locations, warehouses } from "../../db/schema/warehouses.schema";
+import { locations } from "../../db/schema/warehouses.schema";
 
 export function slugify(text: string): string {
   return text

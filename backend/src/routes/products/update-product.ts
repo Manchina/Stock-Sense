@@ -12,6 +12,9 @@ import { resolveCategoryId, formatProductResponse } from "./product.helper";
 export async function updateProductHandler(c: Context) {
   try {
     const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.json({ success: false, message: "Product ID is required" }, 400);
+    }
     const body = await c.req.json();
     const parsed = updateProductSchema.safeParse(body);
 
