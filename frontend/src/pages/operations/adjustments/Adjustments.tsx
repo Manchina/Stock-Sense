@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { DataTable, Column } from '../../../components/ui/DataTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -8,32 +8,47 @@ import { SearchInput } from '../../../components/ui/SearchInput';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
 import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
+import { adjustmentsApi } from '../../../features/adjustments/api';
 
 export const Adjustments: React.FC = () => {
   const navigate = useNavigate();
+  const [adjustments, setAdjustments] = useState<OperationDocument[]>(
+    INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment')
+  );
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const adjustments = INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment');
+  const fetchAdjustments = useCallback(async () => {
+    try {
+      const data = await adjustmentsApi.getAll({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: search.trim() ? search.trim() : undefined,
+      });
 
-  const filtered = adjustments.filter((a) => {
-    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        a.documentNumber.toLowerCase().includes(q) ||
-        a.sourceLocation?.toLowerCase().includes(q) ||
-        a.items.some((i) => i.productName.toLowerCase().includes(q))
-      );
+      if (data && data.length > 0) {
+        setAdjustments(data);
+      } else if (!search && statusFilter === 'all') {
+        setAdjustments(INITIAL_OPERATIONS.filter((o) => o.type === 'adjustment'));
+      } else {
+        setAdjustments([]);
+      }
+    } catch (err) {
+      console.warn('Could not fetch adjustments from API:', err);
+    } finally {
+      setIsLoading(false);
     }
-    return true;
-  });
+  }, [statusFilter, search]);
+
+  useEffect(() => {
+    fetchAdjustments();
+  }, [fetchAdjustments]);
 
   const columns: Column<OperationDocument>[] = [
     {
       header: 'Adjustment #',
       cell: (a) => (
-        <div className="font-bold text-slate-900 hover:text-primary">
+        <div className="font-bold text-slate-900 hover:text-primary font-mono text-xs">
           {a.documentNumber}
         </div>
       ),
@@ -47,7 +62,7 @@ export const Adjustments: React.FC = () => {
       header: 'Adjusted Products',
       cell: (a) => (
         <div className="text-xs space-y-0.5">
-          {a.items.map((i, idx) => (
+          {(a.items || []).map((i, idx) => (
             <div key={idx} className="font-semibold text-slate-900">
               <span className={`font-bold ${i.quantity >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                 {i.quantity > 0 ? `+${i.quantity}` : i.quantity} {i.unitOfMeasure}
@@ -98,19 +113,28 @@ export const Adjustments: React.FC = () => {
         >
           <option value="all">All Statuses</option>
           <option value="draft">Draft</option>
-          <option value="done">Applied / Done</option>
+          <option value="waiting">Waiting</option>
+          <option value="ready">Ready</option>
+          <option value="done">Done (Applied)</option>
           <option value="canceled">Canceled</option>
         </select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyExtractor={(a) => a.id}
-        emptyTitle="No stock adjustments found"
-        emptyDescription="Create an adjustment to reconcile physical stock discrepancies."
-        onRowClick={(a) => navigate(`/operations/adjustments/${a.id}`)}
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border-2 border-slate-200">
+          <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+          <span className="text-sm font-semibold text-slate-600">Loading adjustments...</span>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={adjustments}
+          keyExtractor={(a) => a.id}
+          emptyTitle="No stock adjustments recorded"
+          emptyDescription="Reconcile inventory when physical counts differ from recorded balances."
+          onRowClick={(a) => navigate(`/operations/adjustments/${a.id}`)}
+        />
+      )}
     </div>
   );
 };

@@ -1,33 +1,74 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, SlidersHorizontal, Ban } from 'lucide-react';
+import { CheckCircle2, SlidersHorizontal, Ban, Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { INITIAL_OPERATIONS } from '../../../lib/constants';
+import { OperationDocument } from '../../../types/common';
 import { formatDate } from '../../../lib/utils';
+import { adjustmentsApi } from '../../../features/adjustments/api';
 
 export const AdjustmentDetails: React.FC = () => {
   const { adjustmentId } = useParams<{ adjustmentId: string }>();
 
-  const [operation, setOperation] = useState(
-    INITIAL_OPERATIONS.find((o) => o.id === adjustmentId) || INITIAL_OPERATIONS[3]
-  );
+  const [operation, setOperation] = useState<OperationDocument | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActionPending, setIsActionPending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleApply = () => {
-    setOperation({
-      ...operation,
-      status: 'done',
-      validatedAt: new Date().toISOString(),
-      validatedBy: 'Sarah Connor (Inventory Manager)',
-    });
+  useEffect(() => {
+    if (!adjustmentId) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    adjustmentsApi
+      .getById(adjustmentId)
+      .then((data) => {
+        if (data) {
+          setOperation(data);
+        } else {
+          const fallback =
+            INITIAL_OPERATIONS.find((o) => o.id === adjustmentId) ||
+            INITIAL_OPERATIONS[3];
+          setOperation(fallback);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load adjustment from API:', err);
+        const fallback =
+          INITIAL_OPERATIONS.find((o) => o.id === adjustmentId) ||
+          INITIAL_OPERATIONS[3];
+        setOperation(fallback);
+      })
+      .finally(() => setIsLoading(false));
+  }, [adjustmentId]);
+
+  const handleUpdateStatus = async (newStatus: 'done' | 'canceled') => {
+    if (!operation) return;
+    setErrorMessage(null);
+    setIsActionPending(true);
+
+    try {
+      const updated = await adjustmentsApi.update(operation.id, {
+        status: newStatus,
+      });
+      setOperation(updated);
+    } catch (err: any) {
+      console.error(`Failed to update adjustment to ${newStatus}:`, err);
+      setErrorMessage(err.message || `Failed to update adjustment to ${newStatus}`);
+    } finally {
+      setIsActionPending(false);
+    }
   };
 
-  const handleCancel = () => {
-    setOperation({
-      ...operation,
-      status: 'canceled',
-    });
-  };
+  if (isLoading || !operation) {
+    return (
+      <div className="flex items-center justify-center p-16 bg-white rounded-2xl border-2 border-slate-200">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mr-3" />
+        <span className="text-sm font-semibold text-slate-600">Loading adjustment details...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-6">
@@ -36,20 +77,37 @@ export const AdjustmentDetails: React.FC = () => {
         subtitle={`Inventory discrepancy correction at ${operation.sourceLocation || 'Warehouse'}`}
         backUrl="/operations/adjustments"
       >
-        {operation.status === 'draft' && (
+        {operation.status !== 'done' && operation.status !== 'canceled' && (
           <>
-            <button onClick={handleCancel} className="btn btn-ghost btn-sm text-error rounded-xl font-bold hover:bg-error/10">
+            <button
+              onClick={() => handleUpdateStatus('canceled')}
+              disabled={isActionPending}
+              className="btn btn-ghost btn-sm text-error rounded-xl font-bold hover:bg-error/10"
+            >
               <Ban className="w-4 h-4 mr-1" /> Cancel
             </button>
             <button
-              onClick={handleApply}
+              onClick={() => handleUpdateStatus('done')}
+              disabled={isActionPending}
               className="btn btn-primary btn-sm text-white rounded-xl shadow-xs font-bold flex items-center gap-1.5"
             >
-              <CheckCircle2 className="w-4 h-4" /> Apply to Ledger
+              {isActionPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              Apply to Ledger
             </button>
           </>
         )}
       </PageHeader>
+
+      {errorMessage && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -63,7 +121,7 @@ export const AdjustmentDetails: React.FC = () => {
                 <StatusBadge status={operation.status} size="md" />
                 {operation.status === 'done' && (
                   <span className="text-xs font-bold text-emerald-700">
-                    ✓ Applied to inventory ledger
+                    ✓ Reconciled and applied to stock ledger
                   </span>
                 )}
               </div>
@@ -74,7 +132,7 @@ export const AdjustmentDetails: React.FC = () => {
             <div>Created: {formatDate(operation.createdAt)}</div>
             {operation.validatedAt && (
               <div className="text-emerald-700 font-bold mt-0.5">
-                Applied: {formatDate(operation.validatedAt)} by {operation.validatedBy}
+                Applied: {formatDate(operation.validatedAt)} by {operation.validatedBy || 'Staff'}
               </div>
             )}
           </div>
@@ -107,7 +165,7 @@ export const AdjustmentDetails: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {operation.items.map((item, idx) => (
+            {(operation.items || []).map((item, idx) => (
               <tr key={idx}>
                 <td className="font-bold text-slate-900">{item.productName}</td>
                 <td className="font-mono text-slate-500 font-medium">{item.sku}</td>
