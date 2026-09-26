@@ -2,6 +2,7 @@ import { pgEnum } from "drizzle-orm/pg-core";
 
 // User roles for Role-Based Access Control (RBAC)
 export const userRoleEnum = pgEnum("user_role", [
+  "super_admin",
   "inventory_manager",
   "warehouse_staff",
 ]);

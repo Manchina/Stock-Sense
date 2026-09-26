@@ -17,6 +17,7 @@ import { useUiStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { InventoryNotification } from '../../features/notifications/types';
+import { cn } from '../../lib/utils';
 
 function formatRelativeTime(dateString: string): string {
   try {
@@ -124,10 +125,23 @@ export const Header: React.FC = () => {
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full border border-blue-200">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-bold text-primary">
-            {user?.role === 'inventory_manager' ? 'Inventory Manager Portal' : 'Warehouse Staff Ops'}
+        <div
+          className={cn(
+            'hidden sm:flex items-center gap-2 px-3 py-1 rounded-full border',
+            user?.role === 'super_admin'
+              ? 'bg-purple-50 text-purple-700 border-purple-200'
+              : user?.role === 'inventory_manager'
+              ? 'bg-blue-50 text-primary border-blue-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          )}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span className="text-xs font-bold">
+            {user?.role === 'super_admin'
+              ? 'Super Admin (Full Access)'
+              : user?.role === 'inventory_manager'
+              ? 'Inventory Manager Portal'
+              : 'Warehouse Staff Ops'}
           </span>
         </div>
       </div>

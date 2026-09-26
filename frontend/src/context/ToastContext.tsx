@@ -74,6 +74,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const error = useCallback(
     (message: string, title?: string) => {
+      const lower = (message || '').toLowerCase();
+      if (lower.includes('expired') && (lower.includes('token') || lower.includes('jwt') || lower.includes('unauthorized'))) {
+        return '';
+      }
       return showToast({ type: 'error', message, title });
     },
     [showToast]
@@ -95,27 +99,36 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const zod = useCallback(
     (err: unknown, fallbackMessage?: string) => {
+      if (err instanceof ApiError && err.status === 401) {
+        return '';
+      }
+
+      const anyError = err as any;
+      if (anyError?.status === 401 || anyError?.response?.status === 401) {
+        return '';
+      }
+
+      const rawMsg = (err instanceof Error ? err.message : String(err || '')).toLowerCase();
+      if (rawMsg.includes('expired') && (rawMsg.includes('token') || rawMsg.includes('jwt') || rawMsg.includes('unauthorized'))) {
+        return '';
+      }
+
       if (err instanceof ApiError) {
-        const hasFields = err.zodError?.fieldErrors && err.zodError.fieldErrors.length > 0;
         return showToast({
-          type: hasFields ? 'zod' : 'error',
-          title: hasFields ? (err.zodError.title || 'Validation Error') : 'Operation Failed',
-          message: err.message,
+          type: 'zod',
+          title: err.zodError.title || 'Validation Error',
+          message: err.zodError.summary || err.message,
           zodError: err.zodError,
           duration: 9000,
         });
       }
 
-      const anyError = err as any;
-      const errorPayload = anyError?.response?.data || anyError?.data || anyError?.errors ? (anyError.data || anyError.response?.data || anyError) : null;
-      if (errorPayload) {
-        const formatted = formatZodApiError(errorPayload);
-        const hasFields = formatted.fieldErrors && formatted.fieldErrors.length > 0;
-        const apiMsg = errorPayload.message || errorPayload.error || formatted.summary;
+      if (anyError?.response?.data || anyError?.data || anyError?.errors) {
+        const formatted = formatZodApiError(anyError.data || anyError.response?.data || anyError);
         return showToast({
-          type: hasFields ? 'zod' : 'error',
-          title: hasFields ? formatted.title : 'Validation Error',
-          message: apiMsg,
+          type: 'zod',
+          title: formatted.title,
+          message: formatted.summary,
           zodError: formatted,
           duration: 9000,
         });
@@ -123,11 +136,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return showToast({
         type: 'error',
-        title: 'Error',
+        title: 'Validation Error',
         message:
           (err instanceof Error ? err.message : String(err)) ||
           fallbackMessage ||
-          'Operation failed. Please try again.',
+          'Form validation failed. Please check the inputs.',
       });
     },
     [showToast]

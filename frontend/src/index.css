@@ -47,6 +47,17 @@
   .table td {
     @apply py-3 px-4 text-xs font-medium text-slate-800;
   }
+
+  /* Prevent white-on-white text visibility issue on neutral outline buttons on hover */
+  .btn.btn-outline:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-warning):not(.btn-success):not(.btn-info):not(.text-white):not([class*="text-purple"]):not([class*="text-blue"]):not([class*="text-emerald"]):not([class*="text-rose"]) {
+    color: #334155;
+  }
+
+  .btn.btn-outline:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-warning):not(.btn-success):not(.btn-info):not([class*="hover:bg-purple"]):not([class*="hover:bg-blue"]):not([class*="hover:bg-emerald"]):not([class*="hover:bg-rose"]):hover {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
 }
 
 /* Custom modern scrollbars */

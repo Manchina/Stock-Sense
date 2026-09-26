@@ -83,10 +83,11 @@ export class AuthController {
    * PUT/PATCH /auth/me or /auth/profile (Protected)
    */
   async updateProfile(c: Context) {
+    const currentUser = c.get("user");
     const userId = c.get("userId");
     const body = await c.req.json();
     const validated = updateProfileSchema.parse(body);
-    const updatedUser = await authService.updateProfile(userId, validated);
+    const updatedUser = await authService.updateProfile(userId, validated, currentUser);
     return c.json({ user: updatedUser }, 200);
   }
 }

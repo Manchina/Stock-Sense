@@ -112,7 +112,46 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-slate-600 font-medium">
+          {/* Quick Demo Logins */}
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 text-center">
+              Quick Demo Logins
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@stocksense.io');
+                  setPassword('password123');
+                }}
+                className="btn btn-xs btn-outline border-purple-200 text-purple-700 hover:bg-purple-600 hover:text-white rounded-lg font-bold text-[10px] py-1"
+              >
+                Super Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('manager@stocksense.io');
+                  setPassword('password123');
+                }}
+                className="btn btn-xs btn-outline border-blue-200 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg font-bold text-[10px] py-1"
+              >
+                Manager
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('staff@stocksense.io');
+                  setPassword('password123');
+                }}
+                className="btn btn-xs btn-outline border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg font-bold text-[10px] py-1"
+              >
+                Staff
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 text-center text-xs text-slate-600 font-medium">
             Don't have an account?{' '}
             <Link to="/signup" className="text-primary font-bold hover:underline">
               Create account

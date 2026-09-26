@@ -29,7 +29,7 @@ export class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(res: Response, showToastOnError = true): Promise<T> {
+async function handleResponse<T>(res: Response, showToastOnError = true, endpoint = ''): Promise<T> {
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);
     const message =
@@ -41,7 +41,25 @@ async function handleResponse<T>(res: Response, showToastOnError = true): Promis
       `HTTP error ${res.status}`;
     const apiError = new ApiError(message, res.status, errorData);
     
-    // Automatically trigger Zod error popup across entire application
+    // On 401 Unauthorized / Token Expired: silently log out without showing annoying popups
+    if (res.status === 401) {
+      if (
+        !endpoint.includes('/auth/login') &&
+        !endpoint.includes('/auth/signup') &&
+        !endpoint.includes('/auth/me') &&
+        !endpoint.includes('/auth/refresh')
+      ) {
+        localStorage.removeItem('stocksense_auth_token');
+        localStorage.removeItem('stocksense_refresh_token');
+        localStorage.removeItem('stocksense_user');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('stocksense:logout'));
+        }
+      }
+      throw apiError;
+    }
+
+    // Automatically trigger Zod error popup across entire application for validation errors
     if (showToastOnError && toast?.zod) {
       toast.zod(apiError);
     }
@@ -69,7 +87,7 @@ export const api = {
     const res = await fetch(url, {
       headers: getAuthHeaders(),
     });
-    return handleResponse<T>(res);
+    return handleResponse<T>(res, true, endpoint);
   },
 
   post: async <T>(endpoint: string, body?: unknown): Promise<T> => {
@@ -78,7 +96,7 @@ export const api = {
       headers: getAuthHeaders(),
       body: body ? JSON.stringify(body) : undefined,
     });
-    return handleResponse<T>(res);
+    return handleResponse<T>(res, true, endpoint);
   },
 
   put: async <T>(endpoint: string, body?: unknown): Promise<T> => {
@@ -87,7 +105,7 @@ export const api = {
       headers: getAuthHeaders(),
       body: body ? JSON.stringify(body) : undefined,
     });
-    return handleResponse<T>(res);
+    return handleResponse<T>(res, true, endpoint);
   },
 
   delete: async <T>(endpoint: string): Promise<T> => {
@@ -95,6 +113,6 @@ export const api = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return handleResponse<T>(res);
+    return handleResponse<T>(res, true, endpoint);
   },
 };

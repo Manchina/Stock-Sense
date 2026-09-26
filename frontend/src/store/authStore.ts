@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import type { User } from '../types/common';
+import type { User, UserRole } from '../types/common';
 
 interface AuthResponse {
   user: User;
@@ -20,12 +20,12 @@ interface AuthState {
     name: string;
     email: string;
     password: string;
-    role?: 'inventory_manager' | 'warehouse_staff';
+    role?: UserRole;
   }) => Promise<void>;
   updateProfile: (data: {
     name?: string;
     email?: string;
-    role?: 'inventory_manager' | 'warehouse_staff';
+    role?: UserRole;
   }) => Promise<User>;
   checkAuth: () => Promise<void>;
   logout: () => void;
@@ -180,3 +180,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user, isAuthenticated: !!user });
   },
 }));
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('stocksense:logout', () => {
+    useAuthStore.getState().logout();
+  });
+}
+

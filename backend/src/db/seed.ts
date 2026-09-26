@@ -44,11 +44,24 @@ const initialCategoriesData = [
 export async function seed() {
   console.log("🌱 Starting StockSense database seeding...");
 
+  // Ensure PostgreSQL enum type includes super_admin
+  try {
+    await pool.query(`ALTER TYPE "public"."user_role" ADD VALUE IF NOT EXISTS 'super_admin';`);
+  } catch (err: any) {
+    console.log("  ℹ️ Enum alter note:", err?.message || err);
+  }
+
   // 1. Seed Demo Users
   const defaultPassword = "password123";
   const hashedPassword = await hashPassword(defaultPassword);
 
   const demoUsers = [
+    {
+      name: "Super Admin",
+      email: "admin@stocksense.io",
+      role: "super_admin" as const,
+      passwordHash: hashedPassword,
+    },
     {
       name: "Inventory Manager",
       email: "manager@stocksense.io",
@@ -97,7 +110,12 @@ export async function seed() {
         managerUserId = inserted.id;
       }
     } else {
-      console.log(`  ℹ️ User already exists: ${u.email}`);
+      // Update password hash and role to guarantee credentials
+      await db
+        .update(users)
+        .set({ passwordHash: u.passwordHash, role: u.role, isActive: true })
+        .where(eq(users.id, existing.id));
+      console.log(`  🔄 User refreshed: ${u.email} (${u.role})`);
       if (u.role === "inventory_manager" && !managerUserId) {
         managerUserId = existing.id;
       }

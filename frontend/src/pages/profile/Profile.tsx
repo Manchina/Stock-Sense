@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Shield, Warehouse, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, Mail, Shield, Warehouse, Save, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useAuthStore } from '../../store/authStore';
 import { INITIAL_WAREHOUSES } from '../../lib/constants';
+
+import { UserRole } from '../../types/common';
 
 export const Profile: React.FC = () => {
   const { user, updateProfile, isLoading } = useAuthStore();
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [role, setRole] = useState<'inventory_manager' | 'warehouse_staff'>(
-    (user?.role as 'inventory_manager' | 'warehouse_staff') || 'inventory_manager'
-  );
+  const [role, setRole] = useState<UserRole>(user?.role || 'inventory_manager');
   const [warehouseId, setWarehouseId] = useState(user?.warehouseId || 'wh-1');
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -20,13 +20,15 @@ export const Profile: React.FC = () => {
       setName(user.name);
       setEmail(user.email);
       if (user.role) {
-        setRole(user.role as 'inventory_manager' | 'warehouse_staff');
+        setRole(user.role);
       }
       if (user.warehouseId) {
         setWarehouseId(user.warehouseId);
       }
     }
   }, [user]);
+
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +37,7 @@ export const Profile: React.FC = () => {
       await updateProfile({
         name: name.trim(),
         email: email.trim(),
-        role,
+        ...(isSuperAdmin ? { role } : {}),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -160,19 +162,35 @@ export const Profile: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="form-control">
-                  <label className="label py-0.5 mb-0.5">
-                    <span className="label-text font-bold text-xs text-slate-700">
-                      Assigned Role
-                    </span>
-                  </label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="label py-0">
+                      <span className="label-text font-bold text-xs text-slate-700">
+                        Assigned Role
+                      </span>
+                    </label>
+                    {!isSuperAdmin && (
+                      <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" /> Super Admin only
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as any)}
-                    className="select select-sm select-bordered w-full bg-white border border-slate-300 rounded-lg text-xs font-medium"
+                    disabled={!isSuperAdmin}
+                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    className={`select select-sm select-bordered w-full border border-slate-300 rounded-lg text-xs font-medium ${
+                      !isSuperAdmin ? 'bg-slate-100/80 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'
+                    }`}
                   >
+                    <option value="super_admin">Super Admin (Master Access)</option>
                     <option value="inventory_manager">Inventory Manager</option>
                     <option value="warehouse_staff">Warehouse Staff</option>
                   </select>
+                  {!isSuperAdmin && (
+                    <span className="text-[10px] text-slate-400 mt-1">
+                      Role changes can only be performed by a Super Admin.
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-control">
